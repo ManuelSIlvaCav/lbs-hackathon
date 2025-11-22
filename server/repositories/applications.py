@@ -160,6 +160,7 @@ class ApplicationRepository:
             job_listing_id=application_data.job_listing_id,
             candidate_id=application_data.candidate_id,
             accuracy_score=application_data.accuracy_score,
+            scoring_metadata=application_data.scoring_metadata,
             status=application_data.status,
             created_at=datetime.now(),
             updated_at=datetime.now(),
@@ -247,6 +248,28 @@ class ApplicationRepository:
                 job_listing_ids.add(application["job_posting_id"])
 
         return job_listing_ids
+
+    def get_application_with_details(
+        self, application_id: str
+    ) -> Optional[ApplicationWithDetailsResponse]:
+        """
+        Get a single application with details by ID
+
+        Args:
+            application_id: String representation of MongoDB ObjectId
+
+        Returns:
+            ApplicationWithDetailsResponse if found, None otherwise
+        """
+        try:
+            application = self.collection.find_one({"_id": ObjectId(application_id)})
+            if application:
+                application["_id"] = str(application["_id"])
+                return self._enrich_application_with_details(application)
+            return None
+        except Exception as e:
+            print(f"Error getting application {application_id}: {e}")
+            return None
 
     def update_application_status(
         self, application_id: str, status: str

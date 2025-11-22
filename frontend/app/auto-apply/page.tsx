@@ -1,5 +1,6 @@
 "use client";
 
+import { ScoringDetailsDialog } from "@/components/scoring-details-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SidebarTrigger } from "@/components/ui/sidebar";
@@ -14,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { applicationApi } from "@/lib/api/application";
 import { automationApi } from "@/lib/api/automation";
+import { Application } from "@/lib/types/application";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -81,7 +83,15 @@ const formatRelativeTime = (dateString: string) => {
 
 export default function AutoApplyPage() {
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [selectedApplication, setSelectedApplication] =
+    React.useState<Application | null>(null);
+  const [scoringDialogOpen, setScoringDialogOpen] = React.useState(false);
   const queryClient = useQueryClient();
+
+  const handleScoreClick = (application: Application) => {
+    setSelectedApplication(application);
+    setScoringDialogOpen(true);
+  };
 
   // Fetch applications
   const {
@@ -353,65 +363,98 @@ export default function AutoApplyPage() {
                             <span>{jobTitle}</span>
                           )}
                         </div>
-                        {application.accuracy_score !== null && (
-                          <div className="mt-1 flex items-center gap-2 text-xs">
-                            <span
-                              className={`font-medium ${getFitColor(
-                                application.accuracy_score
-                              )}`}
+                        {application.accuracy_score !== null &&
+                          (application.scoring_metadata ? (
+                            <button
+                              onClick={() => handleScoreClick(application)}
+                              className="mt-1 flex items-center gap-2 text-xs hover:underline cursor-pointer"
                             >
-                              {application.accuracy_score}
-                            </span>
-                            <span className="text-muted-foreground">|</span>
-                            <span
-                              className={getFitColor(
-                                application.accuracy_score
-                              )}
-                            >
-                              {getFitLevel(application.accuracy_score)}
-                            </span>
-                          </div>
-                        )}
+                              <span
+                                className={`font-medium ${getFitColor(
+                                  application.accuracy_score
+                                )}`}
+                              >
+                                {application.accuracy_score}
+                              </span>
+                              <span className="text-muted-foreground">|</span>
+                              <span
+                                className={getFitColor(
+                                  application.accuracy_score
+                                )}
+                              >
+                                {getFitLevel(application.accuracy_score)}
+                              </span>
+                            </button>
+                          ) : (
+                            <div className="mt-1 flex items-center gap-2 text-xs">
+                              <span
+                                className={`font-medium ${getFitColor(
+                                  application.accuracy_score
+                                )}`}
+                              >
+                                {application.accuracy_score}
+                              </span>
+                              <span className="text-muted-foreground">|</span>
+                              <span
+                                className={getFitColor(
+                                  application.accuracy_score
+                                )}
+                              >
+                                {getFitLevel(application.accuracy_score)}
+                              </span>
+                            </div>
+                          ))}
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 w-8 p-0 border-green-600 text-green-600 hover:bg-green-50 hover:text-green-700"
-                            onClick={() =>
-                              approveApplication.mutate(application._id)
-                            }
-                            disabled={
-                              approveApplication.isPending ||
-                              deleteApplication.isPending
-                            }
+                        {application.status.toLowerCase() === "pending" ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 w-8 p-0 border-green-600 text-green-600 hover:bg-green-50 hover:text-green-700"
+                              onClick={() =>
+                                approveApplication.mutate(application._id)
+                              }
+                              disabled={
+                                approveApplication.isPending ||
+                                deleteApplication.isPending
+                              }
+                            >
+                              {approveApplication.isPending ? (
+                                <Loader2Icon className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Check className="h-4 w-4" />
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 w-8 p-0 border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              onClick={() =>
+                                deleteApplication.mutate(application._id)
+                              }
+                              disabled={
+                                approveApplication.isPending ||
+                                deleteApplication.isPending
+                              }
+                            >
+                              {deleteApplication.isPending ? (
+                                <Loader2Icon className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <X className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        ) : (
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${getStatusColor(
+                              application.status
+                            )}`}
                           >
-                            {approveApplication.isPending ? (
-                              <Loader2Icon className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Check className="h-4 w-4" />
-                            )}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-8 w-8 p-0 border-red-600 text-red-600 hover:bg-red-50 hover:text-red-700"
-                            onClick={() =>
-                              deleteApplication.mutate(application._id)
-                            }
-                            disabled={
-                              approveApplication.isPending ||
-                              deleteApplication.isPending
-                            }
-                          >
-                            {deleteApplication.isPending ? (
-                              <Loader2Icon className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <X className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
+                            {application.status.charAt(0).toUpperCase() +
+                              application.status.slice(1)}
+                          </span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -421,6 +464,25 @@ export default function AutoApplyPage() {
           </Table>
         </div>
       </div>
+
+      {/* Scoring Details Dialog */}
+      <ScoringDetailsDialog
+        open={scoringDialogOpen}
+        onOpenChange={setScoringDialogOpen}
+        scoringMetadata={selectedApplication?.scoring_metadata}
+        companyName={
+          selectedApplication?.job_listing?.metadata?.categorization_schema
+            ?.job_info?.company_name ||
+          selectedApplication?.job_listing?.company ||
+          "Unknown Company"
+        }
+        jobTitle={
+          selectedApplication?.job_listing?.metadata?.categorization_schema
+            ?.job_info?.job_title ||
+          selectedApplication?.job_listing?.title ||
+          "Untitled Position"
+        }
+      />
     </div>
   );
 }

@@ -15,11 +15,14 @@ import tempfile
 
 from repositories.candidates import candidate_repository
 from repositories.candidate_files import candidate_file_repository
+from repositories.applications import ApplicationRepository
 from integrations.browser_automation import (
     ApplyToJobPostingAutomationParams,
     ApplyToJobPostingParams,
     apply_to_job_posting,
 )
+
+application_repository = ApplicationRepository()
 
 router = APIRouter(prefix="/api/automation", tags=["automation"])
 
@@ -89,6 +92,22 @@ async def run_automation_job(application_id: str, candidate_id: str):
         automation_jobs[application_id].status = "running"
         automation_jobs[application_id].started_at = datetime.now()
 
+        # Fetch application with details to get job listing information
+        application = application_repository.get_application_with_details(
+            application_id
+        )
+        if not application:
+            raise ValueError(f"Application with id {application_id} not found")
+
+        # Get job listing URL
+        if not application.job_listing or not application.job_listing.url:
+            raise ValueError(
+                f"No job listing URL found for application {application_id}"
+            )
+
+        job_listing_url = application.job_listing.url
+        print(f"Applying to job at URL: {job_listing_url}")
+
         # Fetch candidate data
         candidate = candidate_repository.get_candidate_by_id(candidate_id)
         if not candidate:
@@ -118,10 +137,11 @@ async def run_automation_job(application_id: str, candidate_id: str):
 
         automation_params = ApplyToJobPostingAutomationParams(headless=False)
 
-        # Pass CV file path to automation
+        # Pass CV file path and job listing URL to automation
         apply_info = ApplyToJobPostingParams(
             info=candidate_info,
             resume_file_path=cv_file_path,
+            url_to_apply=job_listing_url,
         )
 
         # Run the automation
@@ -301,14 +321,41 @@ async def trigger_job_application_sync(request: JobApplicationRequest):
         # Generate application ID if not provided
         application_id = request.application_id or f"app_{uuid.uuid4().hex[:8]}"
 
+        # Fetch application with details to get job listing information
+        if request.application_id:
+            application = application_repository.get_application_with_details(
+                request.application_id
+            )
+            if not application:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Application with id {request.application_id} not found",
+                )
+
+            # Get job listing URL
+            if not application.job_listing or not application.job_listing.url:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No job listing URL found for application {request.application_id}",
+                )
+
+            job_listing_url = application.job_listing.url
+            print(f"Applying to job at URL: {job_listing_url}")
+        else:
+            # If no application_id provided, use default URL
+            job_listing_url = "https://careers.deliveroo.co.uk/role/head-of-smb-deliveroo-for-work-632de4408c2e/"
+            print(f"No application ID provided, using default URL: {job_listing_url}")
+
         # Build candidate info from metadata
         candidate_info = build_candidate_info_from_metadata(candidate)
 
         params = ApplyToJobPostingAutomationParams(headless=False)
 
-        # Pass CV file path to automation
+        # Pass CV file path and job listing URL to automation
         apply_info = ApplyToJobPostingParams(
-            candidate_info=candidate_info, resume_file_path=cv_file_path
+            info=candidate_info,
+            resume_file_path=cv_file_path,
+            url_to_apply=job_listing_url,
         )
 
         # Run the automation synchronously

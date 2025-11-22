@@ -64,6 +64,7 @@ async def ai_recommendation(
                 return {
                     "job_listing_id": job_id,
                     "accuracy_score": int(scoring_result.overall_match_score),
+                    "scoring_metadata": scoring_result.model_dump(),  # Save full scoring details
                 }
             else:
                 print(f"No scoring result for job {job_id}, skipping")
@@ -171,7 +172,7 @@ async def create_recommendations(request: RecommendationRequest):
 
     # Filter recommendations with accuracy > 50
     matching_recommendations = [
-        rec for rec in recommendations if rec.get("accuracy_score", 0) > 50
+        rec for rec in recommendations if rec.get("accuracy_score", 0) > 0
     ]
 
     if not matching_recommendations:
@@ -189,6 +190,7 @@ async def create_recommendations(request: RecommendationRequest):
                 job_listing_id=rec["job_listing_id"],
                 candidate_id=request.candidate_id,
                 accuracy_score=rec["accuracy_score"],
+                scoring_metadata=rec.get("scoring_metadata"),
                 status="pending",
             )
 
@@ -216,7 +218,8 @@ async def create_recommendations(request: RecommendationRequest):
 
 @router.patch("/{application_id}/status")
 async def update_application_status(
-    application_id: str, status: str = Query(..., description="New status value")
+    application_id: str,
+    new_status: str = Query(..., alias="status", description="New status value"),
 ):
     """
     Update the status of an application
@@ -227,7 +230,7 @@ async def update_application_status(
     Returns the updated application with job listing and candidate details.
     """
     updated_app = application_repository.update_application_status(
-        application_id, status
+        application_id, new_status
     )
     if not updated_app:
         raise HTTPException(

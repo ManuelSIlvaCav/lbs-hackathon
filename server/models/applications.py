@@ -1,4 +1,4 @@
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Any, Dict
 from datetime import datetime
 from pydantic import BaseModel, BeforeValidator, Field, ConfigDict
 from bson import ObjectId
@@ -29,6 +29,10 @@ class ApplicationModel(BaseModel):
         le=100,
         description="Accuracy score of the application (0-100)",
     )
+    scoring_metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Detailed scoring breakdown from accuracy scoring agent",
+    )
     status: str = Field(default="pending", description="Status of the application")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -41,6 +45,10 @@ class ApplicationCreate(BaseModel):
     candidate_id: str = Field(..., description="ID of the candidate")
     accuracy_score: Optional[float] = Field(
         default=None, ge=0, le=100, description="Accuracy score (0-100)"
+    )
+    scoring_metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Detailed scoring breakdown from accuracy scoring agent",
     )
     status: str = Field(default="pending", description="Status of the application")
 
@@ -63,6 +71,7 @@ class ApplicationResponse(BaseModel):
     job_listing_id: str
     candidate_id: str
     accuracy_score: Optional[float] = None
+    scoring_metadata: Optional[Dict[str, Any]] = None
     status: str
     created_at: datetime
     updated_at: datetime
@@ -77,6 +86,7 @@ class ApplicationWithDetailsResponse(BaseModel):
     job_listing_id: str
     candidate_id: str
     accuracy_score: Optional[float] = None
+    scoring_metadata: Optional[Dict[str, Any]] = None
     status: str
     created_at: datetime
     updated_at: datetime
