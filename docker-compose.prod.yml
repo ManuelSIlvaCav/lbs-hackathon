@@ -1,0 +1,23 @@
+# Docker Compose override for production
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: "3.8"
+
+services:
+  server:
+    command: fastapi run main.py --host 0.0.0.0 --port 8000
+    environment:
+      - ENVIRONMENT=production
+    volumes:
+      - ./server:/app:ro # Read-only in production
+    restart: always
+
+  mongo:
+    restart: always
+    # In production, you might want to use a managed MongoDB service
+    # or configure proper authentication and network security
+
+  # Remove mongo-express in production for security
+  mongo-express:
+    profiles:
+      - debug # Only start with --profile debug

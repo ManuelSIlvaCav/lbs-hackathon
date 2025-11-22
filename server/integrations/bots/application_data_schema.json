@@ -1,0 +1,40 @@
+{
+  "personal_info": {
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "john.doe@example.com",
+    "phone": "+44 7700 900000",
+    "country_code": "United Kingdom (+44)",
+    "preferred_first_name": "John",
+    "preferred_last_name": "Doe"
+  },
+  "address": {
+    "address_line_1": "123 Main Street",
+    "address_line_2": "Apartment 4B",
+    "city": "London",
+    "country": "United Kingdom",
+    "post_code": "SW1A 1AA"
+  },
+  "documents": {
+    "resume_path": "/path/to/resume.pdf",
+    "cover_letter_path": "/path/to/cover_letter.pdf"
+  },
+  "application_details": {
+    "where_did_you_hear": "LinkedIn",
+    "uk_right_to_work_status": "British or Irish citizen",
+    "visa_end_date": "",
+    "annual_salary_expectations": "£60,000",
+    "linkedin_profile": "https://www.linkedin.com/in/johndoe",
+    "previously_employed_by_omnicom": "No"
+  },
+  "demographic_questions": {
+    "gender": "Male",
+    "trans": "No",
+    "ethnic_group": "White - English, Welsh, Scottish, Northern Irish or British",
+    "sexual_orientation": "Heterosexual or straight",
+    "disabled": "No",
+    "main_household_earner_occupation": "Modern professional and traditional professional occupations",
+    "school_type": "A state-run or state-funded school",
+    "free_school_meals_eligible": "No"
+  }
+}

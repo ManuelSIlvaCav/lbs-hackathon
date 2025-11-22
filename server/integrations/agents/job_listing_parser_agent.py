@@ -1,0 +1,331 @@
+from pydantic import BaseModel
+from agents import Agent, ModelSettings, TResponseInputItem, Runner, RunConfig, trace
+from typing import Optional
+
+from utils.web_scraper import scrape_job_description
+
+
+class AgentJobCategorizationSchema__JobInfo(BaseModel):
+    job_title: str | None = None
+    company_name: str | None = None
+    location: str | None = None
+    industry_primary: str | None = None
+    job_company_type: str | None = None
+    overall_role_functions: list[str] = []
+
+
+class AgentJobCategorizationSchema__ExperienceByRoleItem(BaseModel):
+    role_function: str | None = None
+    experience_years_min: float | None = None
+    experience_years_max: float | None = None
+
+
+class AgentJobCategorizationSchema__Minimum(BaseModel):
+    experience_years_min: float | None = None
+    experience_years_max: float | None = None
+    experience_by_role: list[AgentJobCategorizationSchema__ExperienceByRoleItem] = []
+    role_functions: list[str] = []
+    company_type_background: list[str] = []
+    industry_background: list[str] = []
+    hard_skills: list[str] = []
+    soft_skills: list[str] = []
+    degrees: list[str] = []
+    languages: list[str] = []
+    other_requirements: list[str] = []
+    summary: str | None = None
+
+
+class AgentJobCategorizationSchema__Preferred(BaseModel):
+    experience_years_min: float | None = None
+    experience_years_max: float | None = None
+    experience_by_role: list[AgentJobCategorizationSchema__ExperienceByRoleItem] = []
+    role_functions: list[str] = []
+    company_type_background: list[str] = []
+    industry_background: list[str] = []
+    hard_skills: list[str] = []
+    soft_skills: list[str] = []
+    degrees: list[str] = []
+    languages: list[str] = []
+    other_requirements: list[str] = []
+    summary: str | None = None
+
+
+class AgentJobCategorizationSchema__Requirements(BaseModel):
+    minimum: AgentJobCategorizationSchema__Minimum = (
+        AgentJobCategorizationSchema__Minimum()
+    )
+    preferred: AgentJobCategorizationSchema__Preferred = (
+        AgentJobCategorizationSchema__Preferred()
+    )
+
+
+class AgentJobCategorizationSchema(BaseModel):
+    job_info: AgentJobCategorizationSchema__JobInfo = (
+        AgentJobCategorizationSchema__JobInfo()
+    )
+    requirements: AgentJobCategorizationSchema__Requirements = (
+        AgentJobCategorizationSchema__Requirements()
+    )
+    description_summary: str | None = None
+
+
+agent_job_categorization = Agent(
+    name="Agent Job Categorization",
+    instructions="""You are an expert job description parser. Your task is to read a Job Description (JD) and output one and only one JSON object that strictly follows the schema provided below. No explanations, no comments, no extra text.
+Your output must always be:
+Deterministic
+Complete (all keys present)
+Correctly categorized into minimum vs preferred requirements
+Schema compliant (no additional properties, correct types, no omissions)
+YOUR CORE OBJECTIVE Extract ONLY what is explicitly stated or strongly implied in the JD, and fill the JSON template.
+If the JD does not include a piece of information, you must:
+Use null for single value fields
+Use [] for lists
+Use \"\" for summaries
+Never hallucinate. Never invent degrees, skills, industries, years of experience, or company types that are not clearly present or strongly implied in the JD.
+WHERE TO LOOK IN THE JD (MANDATORY)
+You must actively search for requirements in all parts of the JD, especially in sections with titles or phrases such as:
+\"Requirements\"
+\"What you’ll need\"
+\"What you bring\"
+\"You bring\"
+\"Minimum qualifications\"
+\"Basic qualifications\"
+\"Preferred qualifications\"
+\"Nice to have\"
+\"You may be a good fit if you have\"
+\"You may be a good fit if\"
+\"Ideally you have\"
+\"What we’re looking for\"
+\"Who you are\" (when describing candidate traits)
+Very important:
+Sometimes minimum and preferred are in separate sections (e.g. \"Minimum qualifications\" vs \"Preferred qualifications\").
+Sometimes they are mixed in one section, for example under \"You may be a good fit if you have\". In that case you must classify each bullet or sentence individually based on its wording (see rules below).
+Do NOT assume everything under \"You may be a good fit if you have\" is preferred. You still apply the sentence-level rules.
+CLASSIFICATION RULES (MANDATORY)
+You must identify requirement statements and classify them into:
+Minimum Requirements
+Indicators include (non exhaustive): \"must\" \"required\" \"minimum\" \"need to have\" \"have to\" \"you bring\" (when phrased as factual requirements) \"qualifications\" (when not marked as preferred) \"we are looking for\" \"we expect\" Unconditional statements that imply obligation.
+Everything using these types of wording must be placed in requirements.minimum, even if it appears inside a section like \"You may be a good fit if you have\" or \"Requirements\".
+Preferred Requirements
+Indicators include (non exhaustive): \"preferred\" \"nice to have\" \"ideal\" / \"ideally\" \"would be ideal\" \"bonus\" \"advantage\" \"is an asset\" \"good to have\" \"optional\" \"great if you have\" \"you may be a good fit if you have\" (when describing non mandatory extras) \"would be a plus\"
+These always go to requirements.preferred, even if they appear inside a general \"Requirements\" section.
+If wording indicates preference rather than obligation, it belongs to requirements.preferred.
+Mixed sections (very important)
+If a JD section mixes both required and preferred language (for example, under \"You may be a good fit if you have\" or under a single \"Requirements\" heading), you must:
+Inspect each bullet / sentence individually.
+Classify it as minimum or preferred using the wording rules above.
+Do NOT treat the whole section as minimum or as preferred just because of its heading.
+The heading is only a weak hint. The actual classification depends on the sentence-level wording.
+OR LOGIC (MANDATORY)
+Many requirements are expressed as \"A or B\" options. The JSON schema uses flat arrays, so you must encode OR logic using a tagging convention inside the string values.
+When the JD expresses \"A or B\" (meaning any of them is acceptable), you must:
+Assign an OR group id like [or1], [or2], etc.
+Prefix each option in that OR group with the same [orX] tag in the corresponding array.
+Examples:
+\"3 to 5 years of experience in operations or strategy\"
+You should encode:
+\"experience_years_min\": 3 \"experience_years_max\": 5 \"role_functions\": [ \"[or1]operations\", \"[or1]strategy\" ]
+Meaning: operations OR strategy.
+\"ideally from consulting or a fast paced environment\"
+\"company_type_background\": [ \"[or2]consulting\", \"[or2]fast paced environment\" ]
+Meaning: consulting OR fast paced environment.
+\"Certification in project management or other management methodologies is an asset (e.g. PMP, Prince II, Agile/Scrum, Lean Six Sigma, CBAP, OKR Leader, ITIL, or equivalent)\"
+This is preferred hard skills. For example:
+\"hard_skills\": [ \"[or3]PMP\", \"[or3]Prince II\", \"[or3]Agile/Scrum\", \"[or3]Lean Six Sigma\", \"[or3]CBAP\", \"[or3]OKR Leader\", \"[or3]ITIL\", \"[or3]equivalent project management certification\" ]
+All items with the same [orX] tag belong to one OR group. Any item without a [orX] prefix is an independent requirement (AND logic).
+You must apply this OR tagging in any of these list fields when the JD clearly uses \"or\":
+role_functions
+company_type_background
+industry_background
+hard_skills
+soft_skills
+degrees
+languages
+other_requirements
+WHAT TO EXTRACT (AND HOW TO CLASSIFY IT)
+You must fill all fields for both requirements.minimum and requirements.preferred.
+experience_years_min / experience_years_max
+These refer to total relevant experience (not tied to a specific role) when described that way.
+Examples: \"3 years of experience\" → experience_years_min = 3, experience_years_max = null
+\"3 to 5 years of experience\" → experience_years_min = 3, experience_years_max = 5
+\"at least 7 years of experience\" → experience_years_min = 7, experience_years_max = null
+If the JD does not mention total experience explicitly, set both to null.
+experience_by_role
+This captures experience in a specific role type, as distinct from total experience.
+Use experience_by_role when the JD explicitly ties years to a specific role or function, for example:
+\"At least 5 years as a Product Manager\" \"3 years of experience leading teams in operations\" \"2+ years in a client facing consulting role\"
+You must map the described role into a role_function label and fill an object:
+{ \"role_function\": \"product_management\", \"experience_years_min\": 5, \"experience_years_max\": null }
+If a range is provided:
+\"3 to 5 years as a Product Manager\" → \"experience_years_min\": 3, \"experience_years_max\": 5
+If the JD only mentions total experience like \"5+ years of experience in a similar role\" and does not clearly tie it to a specific role function, use only experience_years_min / experience_years_max and leave experience_by_role as [].
+If there are multiple role specific experience requirements, add multiple objects to experience_by_role.
+If there is no role specific experience, experience_by_role must be [].
+role_functions
+Role types or functional areas the candidate must have experience in.
+Examples (non exhaustive): operations strategy project_management analytics product product_management business_operations people_management sales marketing finance change_management data_science consulting
+Map free text to these functional labels when clear, otherwise keep the text as is but concise.
+company_type_background
+Only fill if the JD explicitly mentions working environment type, for example:
+\"experience in a startup\" → \"startup\" \"scale-up environment\" → \"scaleup\" \"experience in a corporate environment\" → \"corporate\" \"consulting background\" → \"consulting\" or \"mbb\" or \"big_four\" if clearly specified \"public sector experience\" → \"public_sector\" \"non profit environment\" → \"nonprofit\"
+If vague or not mentioned, use [].
+Apply OR tags when the JD says \"consulting or a fast paced environment\" etc.
+industry_background
+Fill only if the JD explicitly requires or prefers experience in specific industries.
+Examples: \"experience in logistics\" → \"logistics\" \"healthcare background\" → \"healthcare\" \"payments or fintech industry experience\" → use OR tagging if needed: [\"[or1]payments\", \"[or1]fintech\"]
+If no industry is required or preferred, use [].
+hard_skills
+Technical, methodological, or tool based skills.
+Examples: SQL Python Tableau Power BI Excel financial modelling project management Agile Scrum Lean Six Sigma OKR design roadmap creation data analysis Jira Salesforce
+Include items explicitly mentioned as required or preferred. If certifications are mentioned, you can also capture them here as hard skills, for example \"PMP\".
+Use OR tags when the JD lists alternatives.
+soft_skills
+Behavioural or interpersonal skills.
+Examples: stakeholder management communication leadership problem solving ownership adaptability collaboration influencing skills conflict resolution
+Only include what is clearly implied as candidate traits, not company culture.
+degrees
+Extract exactly the degree requirements.
+Examples: \"Bachelor’s degree in Business, Engineering, or related field\" You can extract as a single string in the list, for example: [\"bachelor’s degree in business, engineering, or related field\"]
+If multiple separate degrees are clearly listed, you may split them.
+If no degree is mentioned, use [].
+languages
+Only include languages explicitly required or preferred.
+Examples: \"Fluency in English required\" → minimum.languages includes \"english\" \"German is an asset\" → preferred.languages includes \"german\"
+If languages are not mentioned, use [].
+other_requirements
+Anything that is clearly a requirement and does not fit the previous fields.
+Examples: \"right to work in the UK\" \"willingness to travel up to 20 percent\" \"ability to work weekends\" \"eligible for security clearance\"
+Use OR tags here if the JD lists alternatives.
+summary
+For requirements.minimum.summary: Write a short 2 to 3 sentence natural language summary of the minimum requirements only.
+For requirements.preferred.summary: Write a short 2 to 3 sentence natural language summary of the preferred requirements only.
+If the JD has no real content for preferred requirements, set preferred.summary to \"\".
+IGNORE FULLY
+You must not extract or classify anything coming from:
+Mission statements
+Company values and culture descriptions
+Benefits and perks
+Employer branding and marketing text
+Diversity and inclusion statements
+Compensation details
+Internal slogans, taglines, or generic fluff about the company
+Only extract content that describes what the candidate must or should have.
+JOB INFO RULES
+job_title Extract the exact job title from the JD. If you see multiple variants, pick the main explicit title of the role.
+company_name Extract the hiring company name if present. If not present, set to null.
+location City and country if available. If only city or only country is given, store whatever is present as a string.
+industry_primary Only fill if it is explicitly stated or extremely obvious from the self description of the company.
+Examples: \"global fintech company\" → \"fintech\" \"leading logistics provider\" → \"logistics\" \"healthcare technology scaleup\" → \"healthcare technology\" or \"healthtech\"
+If unclear, set to null.
+job_company_type Use one of these values when obvious: startup scaleup corporate nonprofit public_sector agency mbb big_four boutique_consulting other
+If it is not clear, set to null.
+overall_role_functions List of high level functional tags describing what the role mainly does.
+Examples: operations strategy product product_management analytics business_operations marketing sales finance project_management change_management data_science
+Pick all that clearly apply based on the core responsibilities.
+DESCRIPTION SUMMARY
+description_summary must be a short 2 to 3 sentence summary of what the role is about (responsibilities and scope), not the requirements.
+FINAL OUTPUT FORMAT
+You must output exactly this JSON structure with all keys present:
+{ \"job_info\": { \"job_title\": null, \"company_name\": null, \"location\": null, \"industry_primary\": null, \"job_company_type\": null, \"overall_role_functions\": [] }, \"requirements\": { \"minimum\": { \"experience_years_min\": null, \"experience_years_max\": null, \"experience_by_role\": [], \"role_functions\": [], \"company_type_background\": [], \"industry_background\": [], \"hard_skills\": [], \"soft_skills\": [], \"degrees\": [], \"languages\": [], \"other_requirements\": [], \"summary\": \"\" }, \"preferred\": { \"experience_years_min\": null, \"experience_years_max\": null, \"experience_by_role\": [], \"role_functions\": [], \"company_type_background\": [], \"industry_background\": [], \"hard_skills\": [], \"soft_skills\": [], \"degrees\": [], \"languages\": [], \"other_requirements\": [], \"summary\": \"\" } }, \"description_summary\": \"\" }
+You must not change this structure. No extra keys, no missing fields, no different field names.
+All string lists must be valid JSON arrays of strings. All numeric fields must be numbers or null. Summaries must be strings (use \"\" when empty).
+FINAL INSTRUCTION
+Read the JD. Actively search for requirement like content in all relevant sections (including \"Requirements\", \"Minimum qualifications\", \"Preferred qualifications\", \"You may be a good fit if you have\", etc.). Classify every requirement precisely into minimum or preferred using the sentence level wording. Encode any OR logic using the [orX] tagging convention inside list values. Fill every field of the JSON strictly according to the schema and rules above. Output only the final JSON object and nothing else.""",
+    model="gpt-4.1-mini",
+    output_type=AgentJobCategorizationSchema,
+    model_settings=ModelSettings(temperature=1, top_p=1, max_tokens=2048, store=True),
+)
+
+
+class WorkflowInput(BaseModel):
+    input_as_text: str
+
+
+# Main code entrypoint
+async def run_workflow(workflow_input: WorkflowInput):
+    with trace("New workflow"):
+        state = {}
+        workflow = workflow_input.model_dump()
+        conversation_history: list[TResponseInputItem] = [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": workflow["input_as_text"]}],
+            }
+        ]
+        agent_job_categorization_result_temp = await Runner.run(
+            agent_job_categorization,
+            input=[*conversation_history],
+            run_config=RunConfig(
+                trace_metadata={
+                    "_trace_source_": "agent-builder",
+                    "workflow_id": "wf_69207b0b8e988190b2f668b227731e7d0278f4f4a4aac1a9",
+                }
+            ),
+        )
+
+        conversation_history.extend(
+            [
+                item.to_input_item()
+                for item in agent_job_categorization_result_temp.new_items
+            ]
+        )
+
+        agent_job_categorization_result = {
+            "output_text": agent_job_categorization_result_temp.final_output.json(),
+            "output_parsed": agent_job_categorization_result_temp.final_output.model_dump(),
+        }
+
+        return agent_job_categorization_result
+
+
+class JobCategorizationInput(BaseModel):
+    job_url: str
+
+
+async def run_agent_job_categorization(
+    categorization_input: JobCategorizationInput,
+) -> Optional[AgentJobCategorizationSchema]:
+    """
+    Helper method to run the Job Listing parser workflow.
+    Scrapes the job URL using Playwright, then sends the content to the AI agent for parsing.
+
+    Args:
+        categorization_input: JobCategorizationInput containing the job_url to parse
+
+    Returns:
+        Parsed job listing data as AgentJobCategorizationSchema, None if failed
+    """
+    try:
+        # Step 1: Scrape the job description from the URL using Playwright
+        print(f"Scraping job description from: {categorization_input.job_url}")
+        job_text = await scrape_job_description(categorization_input.job_url)
+
+        if not job_text:
+            print(f"Failed to scrape content from {categorization_input.job_url}")
+            return None
+
+        print(f"Successfully scraped {len(job_text)} characters of text")
+
+        # Step 2: Send the scraped text to the AI agent for parsing
+        result = await Runner.run(
+            agent_job_categorization,
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"Please parse the following job description:\n\n{job_text}",
+                        }
+                    ],
+                }
+            ],
+        )
+
+        print(f"Job parser result: {result.final_output}")
+        return result.final_output
+
+    except Exception as e:
+        print(f"Error running Job parser for {categorization_input.job_url}: {e}")
+        return None

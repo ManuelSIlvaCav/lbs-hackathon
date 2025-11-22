@@ -1,0 +1,366 @@
+{
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+        "contact_info": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "full_name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "phone": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "email": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "linkedin": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "other_links": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            },
+            "required": [
+                "full_name",
+                "phone",
+                "email",
+                "linkedin",
+                "other_links"
+            ]
+        },
+        "education": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "degree_type": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "degree_name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "major": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "institution": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "start_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "end_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "grades": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "description": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                },
+                "required": [
+                    "degree_type",
+                    "degree_name",
+                    "major",
+                    "institution",
+                    "start_date",
+                    "end_date",
+                    "grades",
+                    "description"
+                ]
+            }
+        },
+        "experience": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "company_name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "role_title": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "location": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "start_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "end_date": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "duration_years": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    },
+                    "industry_primary": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "industries_secondary": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "company_type": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "hard_skills": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "soft_skills": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "summary": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "is_internship": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "company_name",
+                    "role_title",
+                    "location",
+                    "start_date",
+                    "end_date",
+                    "duration_years",
+                    "industry_primary",
+                    "industries_secondary",
+                    "company_type",
+                    "hard_skills",
+                    "soft_skills",
+                    "summary",
+                    "is_internship"
+                ]
+            }
+        },
+        "skills_summary": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "hard_skills_overall": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "soft_skills_overall": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "software_knowledge": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "languages": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "interests": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "other_attributes": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            },
+            "required": [
+                "hard_skills_overall",
+                "soft_skills_overall",
+                "software_knowledge",
+                "languages",
+                "interests",
+                "other_attributes"
+            ]
+        },
+        "meta": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "total_experience_years": {
+                    "type": [
+                        "number",
+                        "null"
+                    ]
+                },
+                "experience_by_role": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "role_family": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "total_years": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "role_family",
+                            "total_years"
+                        ]
+                    }
+                },
+                "industry_primary_summary": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "industry": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "total_years": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "industry",
+                            "total_years"
+                        ]
+                    }
+                },
+                "industry_secondary_summary": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "industry": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "total_years": {
+                                "type": [
+                                    "number",
+                                    "null"
+                                ]
+                            }
+                        },
+                        "required": [
+                            "industry",
+                            "total_years"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "total_experience_years",
+                "experience_by_role",
+                "industry_primary_summary",
+                "industry_secondary_summary"
+            ]
+        }
+    },
+    "required": [
+        "contact_info",
+        "education",
+        "experience",
+        "skills_summary",
+        "meta"
+    ],
+    "title": "response_schema"
+}

@@ -1,0 +1,82 @@
+// Job Info from parser
+export interface JobInfo {
+  job_title: string | null;
+  company_name: string | null;
+  location: string | null;
+  industry_primary: string | null;
+  job_company_type: string | null;
+  overall_role_functions: string[];
+}
+
+// Experience by role item
+export interface ExperienceByRoleItem {
+  role_function: string | null;
+  experience_years_min: number | null;
+  experience_years_max: number | null;
+}
+
+// Requirements (minimum and preferred)
+export interface JobRequirements {
+  experience_years_min: number | null;
+  experience_years_max: number | null;
+  experience_by_role: ExperienceByRoleItem[];
+  role_functions: string[];
+  company_type_background: string[];
+  industry_background: string[];
+  hard_skills: string[];
+  soft_skills: string[];
+  degrees: string[];
+  languages: string[];
+  other_requirements: string[];
+  summary: string | null;
+}
+
+// Full requirements structure
+export interface JobRequirementsStructure {
+  minimum: JobRequirements;
+  preferred: JobRequirements;
+}
+
+// Categorization schema from parser
+export interface JobCategorizationSchema {
+  job_info: JobInfo;
+  requirements: JobRequirementsStructure;
+  description_summary: string | null;
+}
+
+// Metadata
+export interface JobListingMetadata {
+  categorization_schema: JobCategorizationSchema | null;
+}
+
+// Main job listing interface
+export interface JobListing {
+  _id: string;
+  url: string;
+  title: string | null;
+  company: string | null;
+  location: string | null;
+  description: string | null;
+  metadata: JobListingMetadata | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobListingCreate {
+  url: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  description?: string;
+}
+
+export interface JobListingUpdate {
+  url?: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  description?: string;
+  metadata?: JobListingMetadata;
+  status?: string;
+}
