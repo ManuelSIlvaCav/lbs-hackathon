@@ -28,7 +28,11 @@ class DatabaseManager:
             password = os.getenv("MONGODB_PASSWORD", "admin123")
             domain = os.getenv("MONGODB_DOMAIN", "localhost")
             port = os.getenv("MONGODB_PORT", "27017")
-            mongodb_url = f"mongodb://{user}:{password}@{domain}:{port}"
+
+            if domain == "localhost":
+                mongodb_url = f"mongodb://{user}:{password}@{domain}:{port}"
+            else:
+                mongodb_url = f"mongodb://{user}:{password}@{domain}"
             print(f"Connecting to MongoDB at {mongodb_url}...")
             database_name = os.getenv("MONGODB_DATABASE", "lbs_hackathon")
 
