@@ -13,9 +13,11 @@ import os
 import tempfile
 
 
-from repositories.candidates import candidate_repository
-from repositories.candidate_files import candidate_file_repository
-from repositories.applications import ApplicationRepository
+from domains.candidates.repository import (
+    candidate_repository,
+    candidate_file_repository,
+)
+from domains.applications.repository import ApplicationRepository
 from integrations.browser_automation import (
     ApplyToJobPostingAutomationParams,
     ApplyToJobPostingParams,
@@ -135,7 +137,7 @@ async def run_automation_job(application_id: str, candidate_id: str):
         # Build candidate info from metadata
         candidate_info = build_candidate_info_from_metadata(candidate)
 
-        automation_params = ApplyToJobPostingAutomationParams(headless=False)
+        automation_params = ApplyToJobPostingAutomationParams()
 
         # Pass CV file path and job listing URL to automation
         apply_info = ApplyToJobPostingParams(

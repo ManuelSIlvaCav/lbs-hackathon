@@ -5,9 +5,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
 from database import db_manager
-from routes.candidates import router as candidates_router
-from routes.job_listings import router as job_listings_router
-from routes.applications import router as applications_router
+from domains.candidates.routes import router as candidates_router
+from domains.job_listings.routes import router as job_listings_router
+from domains.applications.routes import router as applications_router
 from routes.automation import router as automation_router
 
 # Load environment variables
