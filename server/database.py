@@ -2,11 +2,15 @@
 Database configuration and connection management using pymongo
 """
 
+import logging
 import os
 from pymongo import MongoClient
 from pymongo.database import Database
 from pymongo.collection import Collection
 from typing import Optional
+
+
+logger = logging.getLogger("app")
 
 
 class DatabaseManager:
@@ -29,11 +33,16 @@ class DatabaseManager:
             domain = os.getenv("MONGODB_DOMAIN", "localhost")
             port = os.getenv("MONGODB_PORT", "27017")
 
-            if domain == "localhost":
+            # Check if it's MongoDB Atlas (contains .mongodb.net)
+            if "mongodb.net" in domain:
+                # MongoDB Atlas requires +srv and query parameters
+                mongodb_url = f"mongodb+srv://{user}:{password}@{domain}/?retryWrites=true&w=majority"
+            elif domain == "localhost":
                 mongodb_url = f"mongodb://{user}:{password}@{domain}:{port}"
             else:
                 mongodb_url = f"mongodb://{user}:{password}@{domain}"
-            print(f"Connecting to MongoDB at {mongodb_url}...")
+
+            logger.info(f"Connecting to MongoDB at {mongodb_url}...")
             database_name = os.getenv("MONGODB_DATABASE", "lbs_hackathon")
 
             self._client = MongoClient(mongodb_url)
@@ -41,8 +50,8 @@ class DatabaseManager:
 
             # Test connection
             self._client.server_info()
-            print(f"✅ Connected to MongoDB at {mongodb_url}")
-            print(f"✅ Using database: {database_name}")
+            logger.info(f"✅ Connected to MongoDB at {domain}")
+            logger.info(f"✅ Using database: {database_name}")
 
         return self._db
 
