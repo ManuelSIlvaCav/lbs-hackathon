@@ -1,39 +1,67 @@
 # Python
-
-**pycache**/
-_.py[cod]
-_$py.class
-\*.so
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
 .Python
 .venv/
 venv/
 ENV/
 env/
+*.egg-info/
+dist/
+build/
 
 # FastAPI
-
 .env
-.env.local
+.env.*
+!.env.example
 
 # IDEs
-
 .vscode/
 .idea/
-_.swp
-_.swo
-\*~
+*.swp
+*.swo
+*~
 
 # OS
-
 .DS_Store
 Thumbs.db
+*.log
 
 # Testing
-
 .pytest_cache/
 .coverage
 htmlcov/
+*.pytest_cache
 
-# Logs
+# Git
+.git/
+.gitignore
+.gitattributes
 
-\*.log
+# Docker
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+test_files/
+agent_history.gif
+
+# Lock files (not needed in runtime)
+uv.lock
+.python-version
