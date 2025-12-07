@@ -1,12 +1,12 @@
 import json
-from logging.config import dictConfig
 import os
-from contextlib import asynccontextmanager
+import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from logging.config import dictConfig
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-
-import logging
 from datetime import datetime
 
 # Load environment variables
@@ -61,6 +61,7 @@ from database import db_manager
 from domains.candidates.routes import router as candidates_router
 from domains.job_listings.routes import router as job_listings_router
 from domains.applications.routes import router as applications_router
+from domains.companies.routes import router as companies_router
 from routes.automation import router as automation_router
 
 
@@ -82,10 +83,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+origins = ["http://localhost:3000", "http://localhost:3001", "*"]
+
 # CORS middleware configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -95,6 +98,7 @@ app.add_middleware(
 app.include_router(candidates_router)
 app.include_router(job_listings_router)
 app.include_router(applications_router)
+app.include_router(companies_router)
 app.include_router(automation_router)
 
 

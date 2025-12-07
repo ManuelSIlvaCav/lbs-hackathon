@@ -1,6 +1,6 @@
 "use client";
 
-import { Briefcase, FileText, Settings, Zap } from "lucide-react";
+import { Briefcase, FileText, Search, Settings, Zap } from "lucide-react";
 
 import {
   Sidebar,
@@ -31,6 +31,11 @@ const jobsItems = [
     icon: Briefcase,
     url: "/job-listings",
   },
+  {
+    title: "Company Jobs",
+    icon: Briefcase,
+    url: "/jobs/company-jobs",
+  },
 ];
 
 const applyItems = [
@@ -39,6 +44,19 @@ const applyItems = [
     icon: Zap,
     url: "/auto-apply",
     badge: "Auto Apply",
+  },
+];
+
+const adminItems = [
+  {
+    title: "Companies",
+    icon: Briefcase,
+    url: "/admin/companies",
+  },
+  {
+    title: "Search Company",
+    icon: Search,
+    url: "/admin/companies/search",
   },
 ];
 
@@ -107,6 +125,24 @@ export function AppSidebar() {
                     asChild
                     isActive={item.url === "/auto-apply"}
                   >
+                    <a href={item.url}>
+                      <item.icon />
+                      <span>{item.title}</span>
+                    </a>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>ADMIN</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {adminItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild>
                     <a href={item.url}>
                       <item.icon />
                       <span>{item.title}</span>

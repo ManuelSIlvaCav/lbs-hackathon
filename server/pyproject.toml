@@ -11,5 +11,6 @@ dependencies = [
     "playwright>=1.56.0",
     "pymongo>=4.6.0",
     "python-dotenv>=1.0.0",
+    "requests==2.32.5",
     "uvicorn>=0.38.0",
 ]

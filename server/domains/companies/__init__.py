@@ -1,0 +1,3 @@
+"""
+Companies domain module
+"""
