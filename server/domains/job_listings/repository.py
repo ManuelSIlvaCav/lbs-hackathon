@@ -1,5 +1,6 @@
 """
 Repository for job listing operations
+Uses the shared job_listings collection from CompanyRepository
 """
 
 from typing import List, Optional
@@ -15,6 +16,8 @@ from .models import (
     JobListingResponse,
     JobListingMetadata,
 )
+from .source_models import ProviderSourceInfo
+from .source_repository import job_listing_source_repository
 from database import get_collection
 from integrations.agents.job_listing_parser_agent import (
     JobCategorizationInput,
@@ -23,10 +26,16 @@ from integrations.agents.job_listing_parser_agent import (
 
 
 class JobListingRepository:
-    """Repository for job listing CRUD operations"""
+    """Repository for job listing CRUD operations using the shared job_listings collection"""
 
     def __init__(self):
+        # Use the shared job_listings collection
         self.collection: Collection = get_collection("job_listings")
+        # Create indexes for job listings
+        self.collection.create_index("company_id")
+        self.collection.create_index("job_enrichment_id")
+        self.collection.create_index("provider_job_id")
+        self.collection.create_index("last_seen_at")
 
     async def create_job_listing(
         self, job_data: JobListingCreate
@@ -201,6 +210,147 @@ class JobListingRepository:
         if status:
             query["status"] = status
         return self.collection.count_documents(query)
+
+    def save_job_listing(self, job_data: JobListingCreate) -> str:
+        """
+        Save a single job listing (used by enrichment system)
+        Also creates/updates source tracking for the provider
+
+        Args:
+            job_data: JobListingCreate object with job information
+
+        Returns:
+            String ID of the inserted job listing
+        """
+        job_dict = job_data.model_dump()
+        job_dict["created_at"] = datetime.now()
+
+        result = self.collection.insert_one(job_dict)
+        job_listing_id = str(result.inserted_id)
+
+        # Create source tracking if provider information is available
+        if job_data.provider and job_data.provider_job_id and job_data.company_id:
+            try:
+                provider_info = ProviderSourceInfo(
+                    job_enrichment_id=job_data.job_enrichment_id,
+                    provider_job_id=job_data.provider_job_id,
+                    url=job_data.url,
+                    first_seen_at=datetime.now(),
+                    last_seen_at=job_data.last_seen_at or datetime.now(),
+                )
+                job_listing_source_repository.add_or_update_provider_source(
+                    job_listing_id=job_listing_id,
+                    company_id=job_data.company_id,
+                    provider_name=job_data.provider,
+                    provider_info=provider_info,
+                )
+            except Exception as e:
+                print(f"Warning: Failed to create source tracking: {e}")
+                # Continue even if source tracking fails
+
+        return job_listing_id
+
+    def save_job_listings_bulk(self, job_listings: List[JobListingCreate]) -> List[str]:
+        """
+        Save multiple job listings in bulk (used by enrichment system)
+        Also creates/updates source tracking for each job
+
+        Args:
+            job_listings: List of JobListingCreate objects
+
+        Returns:
+            List of string IDs of the inserted job listings
+        """
+        if not job_listings:
+            return []
+
+        jobs_to_insert = []
+        for job_data in job_listings:
+            job_dict = job_data.model_dump()
+            job_dict["created_at"] = datetime.now()
+            jobs_to_insert.append(job_dict)
+
+        result = self.collection.insert_many(jobs_to_insert)
+        job_listing_ids = [str(id) for id in result.inserted_ids]
+
+        # Create source tracking for all job listings in bulk
+        sources_data = []
+        for idx, job_data in enumerate(job_listings):
+            if job_data.provider and job_data.provider_job_id and job_data.company_id:
+                provider_info = ProviderSourceInfo(
+                    job_enrichment_id=job_data.job_enrichment_id,
+                    provider_job_id=job_data.provider_job_id,
+                    url=job_data.url,
+                    first_seen_at=datetime.now(),
+                    last_seen_at=job_data.last_seen_at or datetime.now(),
+                )
+                sources_data.append(
+                    {
+                        "job_listing_id": job_listing_ids[idx],
+                        "company_id": job_data.company_id,
+                        "provider_name": job_data.provider,
+                        "provider_info": provider_info,
+                    }
+                )
+
+        if sources_data:
+            try:
+                count = (
+                    job_listing_source_repository.add_or_update_provider_sources_bulk(
+                        sources_data
+                    )
+                )
+                print(f"Created {count} source tracking records")
+            except Exception as e:
+                print(f"Warning: Failed to create source tracking in bulk: {e}")
+                # Continue even if source tracking fails
+
+        return job_listing_ids
+
+    def get_job_listings_by_company(
+        self, company_id: str, provider: str = "apollo"
+    ) -> List[JobListingResponse]:
+        """
+        Get all job listings for a company
+
+        Args:
+            company_id: Company ID to filter by
+            provider: Provider to filter by (default: "apollo")
+
+        Returns:
+            List of JobListingResponse objects
+        """
+        cursor = self.collection.find(
+            {"company_id": company_id, "provider": provider}
+        ).sort("last_seen_at", -1)
+
+        job_listings = []
+        for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            job_listings.append(JobListingResponse(**doc))
+
+        return job_listings
+
+    def get_job_listings_by_enrichment(
+        self, job_enrichment_id: str
+    ) -> List[JobListingResponse]:
+        """
+        Get all job listings for a specific enrichment
+
+        Args:
+            job_enrichment_id: Job enrichment ID to filter by
+
+        Returns:
+            List of JobListingResponse objects
+        """
+        cursor = self.collection.find({"job_enrichment_id": job_enrichment_id})
+
+        job_listings = []
+        for doc in cursor:
+            doc["_id"] = str(doc["_id"])
+            job_listings.append(JobListingResponse(**doc))
+
+        return job_listings
 
 
 # Singleton instance

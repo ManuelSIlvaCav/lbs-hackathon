@@ -49,26 +49,44 @@ export interface JobListingMetadata {
   categorization_schema: JobCategorizationSchema | null;
 }
 
-// Main job listing interface
+// Main job listing interface (aligned with JobListingResponse from backend)
 export interface JobListing {
   _id: string;
   url: string;
   title: string | null;
   company: string | null;
+  company_id: string | null;
   location: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
   description: string | null;
+  posted_at: string | null;
+  last_seen_at: string | null;
+  provider: string;
+  provider_job_id: string | null;
+  job_enrichment_id: string | null;
   metadata: JobListingMetadata | null;
   status: string;
   created_at: string;
-  updated_at: string;
+  updated_at: string | null;
 }
 
 export interface JobListingCreate {
   url: string;
-  title?: string;
+  title: string;
   company?: string;
+  company_id?: string;
   location?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   description?: string;
+  posted_at?: string;
+  last_seen_at?: string;
+  provider?: string;
+  provider_job_id?: string;
+  job_enrichment_id?: string;
 }
 
 export interface JobListingUpdate {

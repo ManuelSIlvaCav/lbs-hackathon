@@ -31,7 +31,7 @@ interface SearchResponse {
   provider: string;
 }
 
-export default function SearchCompanyPage() {
+export function SearchTab() {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Company[]>([]);
@@ -88,14 +88,7 @@ export default function SearchCompanyPage() {
   };
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Search Companies</h1>
-        <p className="text-muted-foreground mt-2">
-          Search for companies using external data providers
-        </p>
-      </div>
-
+    <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle>Search</CardTitle>

@@ -1,6 +1,8 @@
 "use client";
 
-import { Briefcase, FileText, Search, Settings, Zap } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { Briefcase, FileText, LogOut, Search, User, Zap } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 import {
   Sidebar,
@@ -21,7 +23,7 @@ const prepareItems = [
   {
     title: "Resumes",
     icon: FileText,
-    url: "/resumes",
+    url: "/dashboard/resumes",
   },
 ];
 
@@ -29,12 +31,7 @@ const jobsItems = [
   {
     title: "Job Listings",
     icon: Briefcase,
-    url: "/job-listings",
-  },
-  {
-    title: "Company Jobs",
-    icon: Briefcase,
-    url: "/jobs/company-jobs",
+    url: "/dashboard/job-listings",
   },
 ];
 
@@ -42,7 +39,7 @@ const applyItems = [
   {
     title: "Auto Apply",
     icon: Zap,
-    url: "/auto-apply",
+    url: "/dashboard/auto-apply",
     badge: "Auto Apply",
   },
 ];
@@ -51,17 +48,24 @@ const adminItems = [
   {
     title: "Companies",
     icon: Briefcase,
-    url: "/admin/companies",
+    url: "/dashboard/admin/companies",
   },
   {
     title: "Search Company",
     icon: Search,
-    url: "/admin/companies/search",
+    url: "/dashboard/admin/companies/search",
   },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { user, logout, isAdmin } = useAuth();
+  const router = useRouter();
+
+  const handleLogout = () => {
+    logout();
+    router.push("/login");
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -136,48 +140,51 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>ADMIN</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {adminItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </a>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>ADMIN</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <a href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </a>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
-              <a href="/settings">
-                <Settings />
-                <span>Settings</span>
-              </a>
+            <SidebarMenuButton onClick={handleLogout}>
+              <LogOut />
+              <span>Logout</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
 
-        {state === "expanded" && (
+        {state === "expanded" && user && (
           <div className="mt-4 flex items-center gap-3 rounded-lg bg-sidebar-accent p-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
-              DS
+              <User className="h-4 w-4" />
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="truncate text-sm font-medium">
-                Diego Sarau...
+                {user.full_name || "User"}
+                {isAdmin && (
+                  <span className="ml-2 text-xs text-orange-600">(Admin)</span>
+                )}
               </span>
               <span className="truncate text-xs text-muted-foreground">
-                diego.mba2025@london.edu
+                {user.email}
               </span>
             </div>
           </div>

@@ -5,10 +5,13 @@ Apollo.io provider implementation
 import logging
 import os
 import requests
-from typing import Dict, Any, List, Optional
+from typing import List, Optional
 from datetime import datetime
 
-from .apollo_models import ApolloSearchResponse
+from .apollo_models import (
+    ApolloSearchResponse,
+    EnrichedCompanyResponse,
+)
 from ..company_information_service_provider import (
     CompanyInformationServiceProvider,
 )
@@ -88,7 +91,7 @@ class ApolloProvider(CompanyInformationServiceProvider):
             logger.error(f"Apollo API error: {str(e)}")
             raise Exception(f"Apollo API error: {str(e)}")
 
-    def get_company_information(self, identifier: str) -> Dict[str, Any]:
+    def get_company_information(self, identifier: str) -> EnrichedCompanyResponse:
         """
         Get detailed company information by domain
 
@@ -98,12 +101,10 @@ class ApolloProvider(CompanyInformationServiceProvider):
         Returns:
             Dict containing company information
         """
-        url = f"{self.base_url}/organizations/enrich"
-
-        payload = {"api_key": self.api_key, "domain": identifier}
+        url = f"{self.base_url}/organizations/enrich?domain={identifier}"
 
         try:
-            response = requests.post(url, headers=self.headers, json=payload)
+            response = requests.get(url, headers=self.headers)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -152,10 +153,10 @@ class ApolloProvider(CompanyInformationServiceProvider):
                 linkedin_url=org.linkedin_url,
                 logo_url=org.logo_url,
                 domain=org.primary_domain,
-                industry=None,  # Apollo doesn't provide industry directly
+                industries=None,  # Will be populated from enrichment
                 description=description,
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
             )
 
             companies.append(company)
@@ -198,6 +199,34 @@ class ApolloProvider(CompanyInformationServiceProvider):
         logger.info("Saved Apollo search result to repository")
 
         return companies, apollo_response
+
+    def get_job_listings(self, organization_id: str) -> dict:
+        """
+        Get job listings for a company from Apollo.io
+
+        Args:
+            organization_id: Apollo.io organization ID
+
+        Returns:
+            Raw response from Apollo API
+        """
+        url = f"{self.base_url}/organizations/{organization_id}/job_postings"
+
+        try:
+            logger.info(f"Fetching job listings for organization {organization_id}")
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+
+            raw_response = response.json()
+            logger.info(
+                f"Retrieved job listings from Apollo for organization {organization_id}"
+            )
+
+            return raw_response
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Apollo API error fetching job listings: {str(e)}")
+            raise Exception(f"Apollo API error: {str(e)}")
 
 
 # Singleton instance

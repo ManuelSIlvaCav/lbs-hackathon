@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Company } from "@/contexts/admin-company-context";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus } from "lucide-react";
 import { useState } from "react";
@@ -32,16 +33,6 @@ const companyFormSchema = z.object({
 });
 
 type CompanyFormValues = z.infer<typeof companyFormSchema>;
-
-interface Company {
-  id: string;
-  name: string;
-  company_url: string;
-  domain?: string;
-  industry?: string;
-  description?: string;
-  logo_url?: string;
-}
 
 interface CreateCompanyDialogProps {
   onCompanyCreated?: (company: Company) => void;

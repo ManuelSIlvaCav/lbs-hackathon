@@ -62,6 +62,7 @@ from domains.candidates.routes import router as candidates_router
 from domains.job_listings.routes import router as job_listings_router
 from domains.applications.routes import router as applications_router
 from domains.companies.routes import router as companies_router
+from domains.auth.routes import router as auth_router
 from routes.automation import router as automation_router
 
 
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting application...")
     db_manager.connect()
+
     yield
     # Shutdown
     logger.info("🛑 Shutting down application...")
@@ -95,6 +97,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth_router)
 app.include_router(candidates_router)
 app.include_router(job_listings_router)
 app.include_router(applications_router)

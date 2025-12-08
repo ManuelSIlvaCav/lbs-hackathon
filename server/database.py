@@ -45,9 +45,8 @@ class DatabaseManager:
             logger.info(f"Connecting to MongoDB at {mongodb_url}...")
             database_name = os.getenv("MONGODB_DATABASE", "lbs_hackathon")
 
-            self._client = MongoClient(mongodb_url)
+            self._client = MongoClient(mongodb_url, maxpoolsize=50)
             self._db = self._client[database_name]
-
             # Test connection
             self._client.server_info()
             logger.info(f"✅ Connected to MongoDB at {domain}")

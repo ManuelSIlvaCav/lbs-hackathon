@@ -7,7 +7,7 @@ from pymongo.collection import Collection
 from bson import ObjectId
 
 from database import get_collection
-from .models import CompanyModel, CompanyResponse, CompanyCreate
+from .models import CompanyModel
 from datetime import datetime
 
 
@@ -21,7 +21,7 @@ class CompanyRepository:
 
     def search_companies(
         self, query: str = "", skip: int = 0, limit: int = 20
-    ) -> tuple[List[CompanyResponse], int]:
+    ) -> tuple[List[CompanyModel], int]:
         """
         Search companies by text query with pagination
 
@@ -56,11 +56,11 @@ class CompanyRepository:
         companies = []
         for doc in cursor:
             companies.append(
-                CompanyResponse(
+                CompanyModel(
                     id=str(doc["_id"]),
                     name=doc["name"],
                     company_url=doc.get("company_url"),
-                    industry=doc.get("industry"),
+                    industries=doc.get("industries"),
                     description=doc.get("description"),
                     logo_url=doc.get("logo_url"),
                 )
@@ -71,24 +71,24 @@ class CompanyRepository:
 
         return companies, total_count
 
-    def get_company_by_id(self, company_id: str) -> Optional[CompanyResponse]:
+    def get_company_by_id(self, company_id: str) -> Optional[CompanyModel]:
         """Get a company by ID"""
         doc = self.collection.find_one({"_id": ObjectId(company_id)})
         if not doc:
             return None
 
-        return CompanyResponse(
+        return CompanyModel(
             id=str(doc["_id"]),
             name=doc["name"],
             company_url=doc.get("company_url"),
-            industry=doc.get("industry"),
+            industries=doc.get("industries"),
             description=doc.get("description"),
             logo_url=doc.get("logo_url"),
         )
 
-    def create_company(self, company_data) -> CompanyResponse:
+    def create_company(self, company_data) -> CompanyModel:
         """Create a new company"""
-        now = datetime.utcnow()
+        now = datetime.now()
 
         # Handle both dict and CompanyCreate object
         if isinstance(company_data, dict):
@@ -101,13 +101,66 @@ class CompanyRepository:
 
         result = self.collection.insert_one(company_dict)
 
-        return CompanyResponse(
+        return CompanyModel(
             id=str(result.inserted_id),
             name=company_dict["name"],
             company_url=company_dict.get("company_url"),
-            industry=company_dict.get("industry"),
+            industries=company_dict.get("industries"),
             description=company_dict.get("description"),
             logo_url=company_dict.get("logo_url"),
+        )
+
+    def update_company_from_enrichment(
+        self, company_id: str, enriched_data: dict
+    ) -> Optional[CompanyModel]:
+        """Update company fields from enrichment data"""
+        org = enriched_data.get("organization", {})
+
+        # Build description from various fields
+        description = ""
+
+        if org.get("short_description"):
+            description += org.get("short_description") + ". "
+
+        # Prepare update data
+        update_data = {
+            "updated_at": datetime.now(),
+        }
+
+        # Add optional fields if they exist
+        if description:
+            update_data["description"] = description
+
+        if org.get("industries"):
+            update_data["industries"] = org["industries"]
+
+        if org.get("logo_url"):
+            update_data["logo_url"] = org["logo_url"]
+
+        if org.get("linkedin_url"):
+            update_data["linkedin_url"] = org["linkedin_url"]
+
+        # Update the company
+        result = self.collection.find_one_and_update(
+            {"_id": ObjectId(company_id)},
+            {"$set": update_data},
+            return_document=True,
+        )
+
+        if not result:
+            return None
+
+        return CompanyModel(
+            id=str(result["_id"]),
+            name=result["name"],
+            company_url=result.get("company_url"),
+            industries=result.get("industries"),
+            description=result.get("description"),
+            logo_url=result.get("logo_url"),
+            linkedin_url=result.get("linkedin_url"),
+            domain=result.get("domain"),
+            created_at=result.get("created_at"),
+            updated_at=result.get("updated_at"),
         )
 
 

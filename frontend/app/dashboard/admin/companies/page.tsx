@@ -1,6 +1,8 @@
 "use client";
 
 import { CompanyCombobox } from "@/components/company-combobox";
+import { JobListings } from "@/components/job-listings";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,24 +10,62 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Company } from "@/contexts/admin-company-context";
+import { useAuth } from "@/contexts/auth-context";
+import { getCompanyJobListings } from "@/lib/api/company-jobs";
+import { CompanyJobListing } from "@/lib/types/company-job-listing";
+import { Briefcase } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { CreateCompanyDialog } from "./create-company-dialog";
-
-interface Company {
-  id: string;
-  name: string;
-  company_url?: string;
-  industry?: string;
-  description?: string;
-  logo_url?: string;
-}
 
 export default function AdminCompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [jobListings, setJobListings] = useState<CompanyJobListing[]>([]);
+  const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  const [showJobs, setShowJobs] = useState(false);
+  const { token } = useAuth();
 
   const handleCompanyCreated = (company: Company) => {
     setSelectedCompany(company);
+    setShowJobs(false);
+    setJobListings([]);
   };
+
+  const handleCompanySelect = (company: Company | null) => {
+    setSelectedCompany(company);
+    setShowJobs(false);
+    setJobListings([]);
+  };
+
+  const handleGetJobs = async () => {
+    if (!selectedCompany?._id) return;
+
+    setIsLoadingJobs(true);
+    setShowJobs(true);
+
+    try {
+      const jobs = await getCompanyJobListings(
+        selectedCompany._id,
+        token || undefined
+      );
+      setJobListings(jobs);
+      toast.success(`Found ${jobs.length} job listings`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch job listings";
+      toast.error(message);
+      setShowJobs(false);
+    } finally {
+      setIsLoadingJobs(false);
+    }
+  };
+
+  // Check if company has description or industries (indicators of enrichment)
+  const isEnriched =
+    selectedCompany &&
+    (selectedCompany.description ||
+      (selectedCompany.industries && selectedCompany.industries.length > 0));
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -52,7 +92,7 @@ export default function AdminCompaniesPage() {
         <CardContent>
           <CompanyCombobox
             value={selectedCompany}
-            onSelect={setSelectedCompany}
+            onSelect={handleCompanySelect}
             placeholder="Search companies..."
             className="max-w-md"
           />
@@ -61,8 +101,20 @@ export default function AdminCompaniesPage() {
 
       {selectedCompany && (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle>Company Details</CardTitle>
+            {isEnriched && (
+              <Button
+                onClick={handleGetJobs}
+                disabled={isLoadingJobs}
+                size="sm"
+                variant="outline"
+                className="gap-2"
+              >
+                <Briefcase className="h-4 w-4" />
+                {isLoadingJobs ? "Loading..." : "Get Jobs"}
+              </Button>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4">
@@ -82,14 +134,17 @@ export default function AdminCompaniesPage() {
                 )}
               </div>
 
-              {selectedCompany.industry && (
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Industry
-                  </p>
-                  <p className="text-sm">{selectedCompany.industry}</p>
-                </div>
-              )}
+              {selectedCompany.industries &&
+                selectedCompany.industries.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Industries
+                    </p>
+                    <p className="text-sm">
+                      {selectedCompany.industries.join(", ")}
+                    </p>
+                  </div>
+                )}
 
               {selectedCompany.description && (
                 <div>
@@ -112,16 +167,12 @@ export default function AdminCompaniesPage() {
                   />
                 </div>
               )}
-
-              <div className="pt-4 border-t">
-                <p className="text-xs text-muted-foreground">
-                  Company ID: {selectedCompany.id}
-                </p>
-              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {showJobs && <JobListings jobs={jobListings} isLoading={isLoadingJobs} />}
     </div>
   );
 }

@@ -14,18 +14,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Company } from "@/contexts/admin-company-context";
 import { cn } from "@/lib/utils";
 import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import * as React from "react";
-
-interface Company {
-  id: string;
-  name: string;
-  company_url?: string;
-  industry?: string;
-  description?: string;
-  logo_url?: string;
-}
 
 interface CompanyComboboxProps {
   value?: Company | null;
@@ -164,31 +156,45 @@ export function CompanyCombobox({
               )}
             </CommandEmpty>
             <CommandGroup>
-              {companies.map((company) => (
-                <CommandItem
-                  key={company.id}
-                  value={company.id}
-                  onSelect={() => {
-                    onSelect(value?.id === company.id ? null : company);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value?.id === company.id ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  <div className="flex flex-col">
-                    <span className="font-medium">{company.name}</span>
-                    {company.industry && (
-                      <span className="text-xs text-muted-foreground">
-                        {company.industry}
-                      </span>
-                    )}
-                  </div>
-                </CommandItem>
-              ))}
+              {companies.map((company, index) => {
+                const isSelected = value && value?._id === company._id;
+                return (
+                  <CommandItem
+                    key={
+                      company._id
+                        ? `company-${company._id}`
+                        : `company-index-${index}`
+                    }
+                    value={company.name}
+                    onSelect={() => {
+                      console.log("CompanyCombobox - Selecting company:", {
+                        company,
+                        currentValue: value,
+                        isSelected,
+                        willSelect: isSelected ? null : company,
+                      });
+                      // Toggle selection: if already selected, deselect; otherwise select
+                      onSelect(isSelected ? null : company);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        isSelected ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{company.name}</span>
+                      {company.industries && company.industries.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {company.industries.join(", ")}
+                        </span>
+                      )}
+                    </div>
+                  </CommandItem>
+                );
+              })}
               {loading && companies.length > 0 && (
                 <div className="flex items-center justify-center py-2">
                   <Loader2 className="h-4 w-4 animate-spin" />

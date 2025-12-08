@@ -23,7 +23,7 @@ class JobListingMetadata(BaseModel):
 
 
 class JobListingModel(BaseModel):
-    """Model for job listing data"""
+    """Model for job listing data - unified model supporting both enrichment-based and manual job listings"""
 
     model_config = ConfigDict(
         populate_by_name=True,
@@ -35,8 +35,29 @@ class JobListingModel(BaseModel):
     url: str = Field(..., description="URL of the job listing")
     title: Optional[str] = Field(default=None, description="Job title")
     company: Optional[str] = Field(default=None, description="Company name")
+    company_id: Optional[str] = Field(
+        default=None, description="Reference to company document"
+    )
     location: Optional[str] = Field(default=None, description="Job location")
+    city: Optional[str] = Field(default=None, description="City")
+    state: Optional[str] = Field(default=None, description="State")
+    country: Optional[str] = Field(default=None, description="Country")
     description: Optional[str] = Field(default=None, description="Job description")
+    posted_at: Optional[datetime] = Field(
+        default=None, description="When the job was posted"
+    )
+    last_seen_at: Optional[datetime] = Field(
+        default=None, description="When the job was last seen"
+    )
+    provider: str = Field(
+        default="manual", description="Source provider (apollo, manual, etc.)"
+    )
+    provider_job_id: Optional[str] = Field(
+        default=None, description="Original ID from the provider"
+    )
+    job_enrichment_id: Optional[str] = Field(
+        default=None, description="Reference to job enrichment document"
+    )
     metadata: Optional[JobListingMetadata] = Field(
         default=None, description="Additional job listing metadata including parsing"
     )
@@ -46,13 +67,34 @@ class JobListingModel(BaseModel):
 
 
 class JobListingCreate(BaseModel):
-    """Model for creating a new job listing"""
+    """Model for creating a new job listing - supports both enrichment-based and manual creation"""
 
     url: str = Field(..., min_length=1, description="URL of the job listing")
-    title: Optional[str] = Field(default=None, description="Job title")
+    title: str = Field(..., description="Job title")
     company: Optional[str] = Field(default=None, description="Company name")
+    company_id: Optional[str] = Field(
+        default=None, description="Reference to company document"
+    )
     location: Optional[str] = Field(default=None, description="Job location")
+    city: Optional[str] = Field(default=None, description="City")
+    state: Optional[str] = Field(default=None, description="State")
+    country: Optional[str] = Field(default=None, description="Country")
     description: Optional[str] = Field(default=None, description="Job description")
+    posted_at: Optional[datetime] = Field(
+        default=None, description="When the job was posted"
+    )
+    last_seen_at: Optional[datetime] = Field(
+        default=None, description="When the job was last seen"
+    )
+    provider: str = Field(
+        default="manual", description="Source provider (apollo, manual, etc.)"
+    )
+    provider_job_id: Optional[str] = Field(
+        default=None, description="Original ID from the provider"
+    )
+    job_enrichment_id: Optional[str] = Field(
+        default=None, description="Reference to job enrichment document"
+    )
 
 
 class JobListingUpdate(BaseModel):
@@ -72,17 +114,29 @@ class JobListingUpdate(BaseModel):
 
 
 class JobListingResponse(BaseModel):
-    """Model for job listing response"""
+    """Model for job listing response - full response with all fields"""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={datetime: lambda v: v.isoformat() if v else None},
+    )
 
     id: str = Field(alias="_id")
     url: str
     title: Optional[str] = None
     company: Optional[str] = None
+    company_id: Optional[str] = None
     location: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
     description: Optional[str] = None
+    posted_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    provider: str = "manual"
+    provider_job_id: Optional[str] = None
+    job_enrichment_id: Optional[str] = None
     metadata: Optional[JobListingMetadata] = None
-    status: str
+    status: str = None
     created_at: datetime
-    updated_at: datetime
+    updated_at: datetime = None
