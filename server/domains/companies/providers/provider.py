@@ -2,7 +2,7 @@ from typing import List
 from .company_information_service_provider import InformationServiceContext
 from .implementations.apollo import apollo_provider
 from ..models import CompanyModel
-from domains.job_listings.models import JobListingResponse
+from domains.job_listings.models import JobListingModel
 
 # Use singleton instance
 context = InformationServiceContext(apollo_provider)
@@ -28,7 +28,7 @@ def provider_search_companies(
 
 def provider_get_job_listings(
     company_id: str, provider_company_id: str
-) -> List[JobListingResponse]:
+) -> List[JobListingModel]:
     """
     Get job listings for a company via provider
 

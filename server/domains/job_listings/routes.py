@@ -6,16 +6,14 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Query
 import asyncio
 
-from .models import JobListingCreate, JobListingUpdate, JobListingResponse
+from .models import JobListingCreate, JobListingUpdate, JobListingModel
 from .repository import job_listing_repository
 
 
 router = APIRouter(prefix="/api/job-listings", tags=["job-listings"])
 
 
-@router.post(
-    "/", response_model=JobListingResponse, status_code=status.HTTP_201_CREATED
-)
+@router.post("/", response_model=JobListingModel, status_code=status.HTTP_201_CREATED)
 async def create_job_listing(job_listing: JobListingCreate):
     """
     Create a new job listing with automatic scraping and AI parsing
@@ -52,7 +50,7 @@ async def create_job_listing(job_listing: JobListingCreate):
         )
 
 
-@router.get("/", response_model=List[JobListingResponse])
+@router.get("/", response_model=List[JobListingModel])
 async def get_job_listings(
     skip: int = 0,
     limit: int = 100,
@@ -70,7 +68,7 @@ async def get_job_listings(
     )
 
 
-@router.get("/{job_listing_id}", response_model=JobListingResponse)
+@router.get("/{job_listing_id}", response_model=JobListingModel)
 async def get_job_listing(job_listing_id: str):
     """
     Get a specific job listing by ID
@@ -86,7 +84,7 @@ async def get_job_listing(job_listing_id: str):
     return job_listing
 
 
-@router.put("/{job_listing_id}", response_model=JobListingResponse)
+@router.put("/{job_listing_id}", response_model=JobListingModel)
 async def update_job_listing(job_listing_id: str, job_listing: JobListingUpdate):
     """
     Update a job listing

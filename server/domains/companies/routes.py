@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from .models import CompanyCreate, CompanyModel
 from .repository import company_repository
 from .data_processor_repository import data_processor_repository
-from domains.job_listings.models import JobListingResponse
+from domains.job_listings.models import JobListingModel
 from domains.job_listings.repository import job_listing_repository
 from .providers.provider import (
     provider_get_company_information,
@@ -191,7 +191,7 @@ async def get_company(company_id: str):
     return company
 
 
-@router.get("/{company_id}/job-listings", response_model=list[JobListingResponse])
+@router.get("/{company_id}/job-listings", response_model=list[JobListingModel])
 async def get_company_job_listings(
     company_id: str,
     force_refresh: bool = Query(False, description="Force refresh from provider"),

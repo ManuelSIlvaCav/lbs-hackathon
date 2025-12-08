@@ -4,6 +4,13 @@ from typing import Optional
 
 from utils.web_scraper import scrape_job_description
 
+""" TODO """
+# Implement job listing parsing logic using an AI agent.
+# Parametrize and add
+# Role Title - Software Engineer
+# Employment Type - Full-time, Part-time, Contract, Internship, Temporary
+# Work Arrangement - Remote, On-site, Hybrid
+
 
 class AgentJobCategorizationSchema__JobInfo(BaseModel):
     job_title: str | None = None

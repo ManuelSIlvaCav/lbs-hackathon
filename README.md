@@ -29,3 +29,11 @@ Run
 > pnpm install
 
 > pnpm run dev
+
+# Terraform
+
+## Infracost
+
+Infracost is a service that allows to calculate approximately the cost of the infrastructure being deployed with terraform. ex
+
+> infracost breakdown --show-skipped --path .

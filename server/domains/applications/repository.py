@@ -15,7 +15,7 @@ from .models import (
     ApplicationWithDetailsResponse,
 )
 from domains.candidates.models import CandidateResponse
-from domains.job_listings.models import JobListingResponse
+from domains.job_listings.models import JobListingModel
 from database import get_collection
 
 
@@ -40,9 +40,7 @@ class ApplicationRepository:
             print(f"Error getting candidate {candidate_id}: {e}")
         return None
 
-    def _get_job_listing_by_id(
-        self, job_listing_id: str
-    ) -> Optional[JobListingResponse]:
+    def _get_job_listing_by_id(self, job_listing_id: str) -> Optional[JobListingModel]:
         """Helper method to get job listing data"""
         try:
             job_listing = self.job_listings_collection.find_one(
@@ -50,7 +48,7 @@ class ApplicationRepository:
             )
             if job_listing:
                 job_listing["_id"] = str(job_listing["_id"])
-                return JobListingResponse(**job_listing)
+                return JobListingModel(**job_listing)
         except Exception as e:
             print(f"Error getting job listing {job_listing_id}: {e}")
         return None

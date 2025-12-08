@@ -4,7 +4,7 @@ from pydantic import BaseModel, BeforeValidator, Field, ConfigDict
 from bson import ObjectId
 
 from domains.candidates.models import CandidateResponse
-from domains.job_listings.models import JobListingResponse
+from domains.job_listings.models import JobListingModel
 
 
 # Custom type for MongoDB ObjectId
@@ -91,5 +91,5 @@ class ApplicationWithDetailsResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     # Joined data
-    job_listing: Optional[JobListingResponse] = None
+    job_listing: Optional[JobListingModel] = None
     candidate: Optional[CandidateResponse] = None

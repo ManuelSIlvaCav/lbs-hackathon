@@ -49,7 +49,8 @@ export interface JobListingMetadata {
   categorization_schema: JobCategorizationSchema | null;
 }
 
-// Main job listing interface (aligned with JobListingResponse from backend)
+// Main job listing interface (aligned with JobListingModel from backend)
+// Note: Provider tracking moved to JobListingSourceModel
 export interface JobListing {
   _id: string;
   url: string;
@@ -63,9 +64,6 @@ export interface JobListing {
   description: string | null;
   posted_at: string | null;
   last_seen_at: string | null;
-  provider: string;
-  provider_job_id: string | null;
-  job_enrichment_id: string | null;
   metadata: JobListingMetadata | null;
   status: string;
   created_at: string;
@@ -84,9 +82,6 @@ export interface JobListingCreate {
   description?: string;
   posted_at?: string;
   last_seen_at?: string;
-  provider?: string;
-  provider_job_id?: string;
-  job_enrichment_id?: string;
 }
 
 export interface JobListingUpdate {

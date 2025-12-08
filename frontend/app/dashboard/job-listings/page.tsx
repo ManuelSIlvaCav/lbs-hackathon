@@ -44,7 +44,11 @@ export default function JobListingsPage() {
 
   // Create job listing mutation
   const createMutation = useMutation({
-    mutationFn: (url: string) => jobListingApi.createJobListing({ url }),
+    mutationFn: (url: string) =>
+      jobListingApi.createJobListing({
+        url,
+        title: "",
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["jobListings"] });
       toast.success("Job listing added successfully!");

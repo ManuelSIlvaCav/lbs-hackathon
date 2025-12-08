@@ -64,6 +64,7 @@ from domains.applications.routes import router as applications_router
 from domains.companies.routes import router as companies_router
 from domains.auth.routes import router as auth_router
 from routes.automation import router as automation_router
+from migrations.migrate_job_listing_sources import migrate_job_listing_sources
 
 
 @asynccontextmanager
@@ -72,7 +73,6 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting application...")
     db_manager.connect()
-
     yield
     # Shutdown
     logger.info("🛑 Shutting down application...")

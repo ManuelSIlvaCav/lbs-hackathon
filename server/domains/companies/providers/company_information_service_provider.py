@@ -9,7 +9,7 @@ from .base import CompanyInformationServiceProvider
 
 from ..enrichment_models import CompanyEnrichmentCreate, CompanyJobEnrichmentCreate
 from ..models import CompanyModel
-from domains.job_listings.models import JobListingResponse, JobListingCreate
+from domains.job_listings.models import JobListingModel, JobListingCreate
 from ..repository import company_repository
 from domains.job_listings.repository import job_listing_repository
 from ..data_processor_repository import data_processor_repository
@@ -123,7 +123,7 @@ class InformationServiceContext:
 
     def get_job_listings(
         self, company_id: str, organization_id: str
-    ) -> List[JobListingResponse]:
+    ) -> List[JobListingModel]:
         """
         Get job listings for a company from the provider and save results
 
@@ -132,7 +132,7 @@ class InformationServiceContext:
             organization_id: Provider-specific organization/company ID
 
         Returns:
-            List of JobListingResponse objects in our standard format
+            List of JobListingModel objects in our standard format
         """
         # Get raw response from provider
         raw_response = self._provider.get_job_listings(organization_id)
@@ -166,10 +166,15 @@ class InformationServiceContext:
             try:
                 job_listing_creates = []
                 for job in job_listings:
+                    # Extract only JobListingCreate-compatible fields (exclude provider fields)
+                    job_create_data = {
+                        k: v
+                        for k, v in job.items()
+                        if k not in ["provider", "provider_job_id"]
+                    }
                     job_create = JobListingCreate(
                         company_id=company_id,
-                        job_enrichment_id=job_enrichment_id,
-                        **job,  # Unpack the dict containing all job fields
+                        **job_create_data,
                     )
                     job_listing_creates.append(job_create)
 
@@ -273,6 +278,8 @@ class InformationServiceContext:
                     except (ValueError, AttributeError):
                         pass
 
+                # Note: provider and provider_job_id kept in dict for source tracking
+                # but won't be passed to JobListingCreate (not in that model)
                 job_dict = {
                     "title": job["title"],
                     "url": job["url"],
@@ -282,8 +289,8 @@ class InformationServiceContext:
                     "country": job.get("country"),
                     "posted_at": posted_at,
                     "last_seen_at": last_seen_at,
-                    "provider": self._provider.provider_name,
-                    "provider_job_id": job["id"],
+                    "provider": self._provider.provider_name,  # For source tracking only
+                    "provider_job_id": job["id"],  # For source tracking only
                 }
 
                 job_listings.append(job_dict)
