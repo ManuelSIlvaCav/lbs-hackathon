@@ -58,3 +58,5 @@ build/
 terraform.tfstate
 terraform.tfstate.*
 .terraform.tfstate.lock.info
+
+*.tfvars

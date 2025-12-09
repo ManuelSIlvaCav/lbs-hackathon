@@ -2,17 +2,19 @@
 Models for job listing sources - tracking jobs from multiple providers
 """
 
-from typing import Annotated, Dict, Optional
+from typing import Annotated, Optional
 from datetime import datetime
 from pydantic import BaseModel, BeforeValidator, Field, ConfigDict
 from bson import ObjectId
+
+from domains.job_listings.models import JobListingMetadata
 
 
 # Custom type for MongoDB ObjectId
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
 
-class ProviderSourceInfo(BaseModel):
+class ApolloProviderSourceInfo(BaseModel):
     """Information about a job from a specific provider"""
 
     job_enrichment_id: Optional[str] = Field(
@@ -32,6 +34,11 @@ class ProviderSourceInfo(BaseModel):
         json_encoders = {datetime: lambda v: v.isoformat() if v else None}
 
 
+class JobListingSourceFieldModel(BaseModel):
+    apollo: Optional[ApolloProviderSourceInfo] = None
+    job_listing_agent: Optional[JobListingMetadata] = None
+
+
 class JobListingSourceModel(BaseModel):
     """Model for tracking a job listing across multiple sources/providers"""
 
@@ -46,9 +53,9 @@ class JobListingSourceModel(BaseModel):
         ..., description="Reference to the main job_listing document"
     )
     company_id: str = Field(..., description="Reference to the company document")
-    sources: Dict[str, ProviderSourceInfo] = Field(
-        default_factory=dict,
-        description="Dictionary of provider sources (e.g., {'apollo': {...}, 'linkedin': {...}})",
+    sources: JobListingSourceFieldModel = Field(
+        default_factory=JobListingSourceFieldModel,
+        description="Sources information for the job listing",
     )
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -59,13 +66,15 @@ class JobListingSourceCreate(BaseModel):
 
     job_listing_id: str
     company_id: str
-    sources: Dict[str, ProviderSourceInfo] = Field(default_factory=dict)
+    sources: JobListingSourceFieldModel = Field(
+        default_factory=JobListingSourceFieldModel,
+    )
 
 
 class JobListingSourceUpdate(BaseModel):
     """Model for updating job listing sources"""
 
-    sources: Optional[Dict[str, ProviderSourceInfo]] = None
+    sources: Optional[JobListingSourceFieldModel] = None
 
 
 class JobListingSourceResponse(BaseModel):
@@ -79,6 +88,6 @@ class JobListingSourceResponse(BaseModel):
     id: str = Field(alias="_id")
     job_listing_id: str
     company_id: str
-    sources: Dict[str, ProviderSourceInfo]
+    sources: JobListingSourceFieldModel
     created_at: datetime
     updated_at: datetime

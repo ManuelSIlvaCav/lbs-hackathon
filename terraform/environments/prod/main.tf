@@ -50,7 +50,9 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
 
-  container_port = 4000
+  container_port  = 4000
+  environment     = local.environment
+  certificate_arn = var.certificate_arn
 }
 
 module "security-groups" {
@@ -82,4 +84,13 @@ module "ecs" {
 
   container_port = 4000
 
+  # MongoDB configuration
+  mongodb_domain   = var.mongodb_domain
+  mongodb_user     = var.mongodb_user
+  mongodb_password = var.mongodb_password
+  mongodb_database = var.mongodb_database
+
+  # API Keys
+  openai_api_key = var.openai_api_key
+  apollo_api_key = var.apollo_api_key
 }

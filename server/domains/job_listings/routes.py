@@ -133,3 +133,45 @@ async def get_job_listing_count(
     """
     count = job_listing_repository.get_job_listing_count(status=status_filter)
     return {"count": count}
+
+
+@router.post("/{job_listing_id}/enrich", response_model=JobListingModel)
+async def enrich_job_listing(job_listing_id: str):
+    """
+    Enrich a job listing by running the AI agent to extract structured data
+
+    This endpoint:
+    - Scrapes the job description from the URL
+    - Runs AI agent to extract profile_categories, role_titles, employment_type, work_arrangement
+    - Extracts detailed requirements (minimum/preferred, skills, experience, etc.)
+    - Updates the job listing with enriched metadata
+    - Sets source_status to 'enriched'
+
+    May take up to 90 seconds due to scraping and AI processing.
+
+    - **job_listing_id**: MongoDB ObjectId as string
+    """
+    try:
+        # Enrich with extended timeout
+        result = await asyncio.wait_for(
+            job_listing_repository.enrich_job_listing(job_listing_id),
+            timeout=120.0,
+        )
+
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job listing with id {job_listing_id} not found or enrichment failed",
+            )
+
+        return result
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Job listing enrichment timed out. Please try again.",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enrich job listing: {str(e)}",
+        )

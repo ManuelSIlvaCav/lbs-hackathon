@@ -86,3 +86,34 @@ variable "ecr_repository_url" {
 }
 
 
+
+## Application environment variables
+variable "mongodb_domain" {
+  type      = string
+  sensitive = true
+}
+
+variable "mongodb_user" {
+  type      = string
+  sensitive = true
+}
+
+variable "mongodb_password" {
+  type      = string
+  sensitive = true
+}
+
+variable "mongodb_database" {
+  type    = string
+  default = "lbs_hackathon"
+}
+
+variable "openai_api_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "apollo_api_key" {
+  type      = string
+  sensitive = true
+}

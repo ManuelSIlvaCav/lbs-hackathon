@@ -2,7 +2,7 @@ from typing import Any, Dict, List
 import logging
 from datetime import datetime
 
-from domains.job_listings.source_models import ProviderSourceInfo
+from domains.job_listings.source_models import ApolloProviderSourceInfo
 from domains.job_listings.source_repository import job_listing_source_repository
 
 from .base import CompanyInformationServiceProvider
@@ -92,6 +92,9 @@ class InformationServiceContext:
 
         # Validate response has organization data
         if "organization" not in response:
+            logger.error(
+                f"Enrichment failed for company {company_id}: missing organization data {response}"
+            )
             raise Exception(
                 "Invalid response from Apollo.io - missing organization data"
             )
@@ -190,7 +193,7 @@ class InformationServiceContext:
                     try:
                         sources_data = []
                         for idx, job in enumerate(job_listings):
-                            provider_info = ProviderSourceInfo(
+                            provider_info = ApolloProviderSourceInfo(
                                 job_enrichment_id=job_enrichment_id,
                                 provider_job_id=job["provider_job_id"],
                                 url=job["url"],

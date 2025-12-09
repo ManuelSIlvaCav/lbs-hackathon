@@ -14,7 +14,7 @@ import { Company } from "@/contexts/admin-company-context";
 import { useAuth } from "@/contexts/auth-context";
 import { getCompanyJobListings } from "@/lib/api/company-jobs";
 import { CompanyJobListing } from "@/lib/types/company-job-listing";
-import { Briefcase } from "lucide-react";
+import { Briefcase, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { CreateCompanyDialog } from "./create-company-dialog";
@@ -24,6 +24,7 @@ export default function AdminCompaniesPage() {
   const [jobListings, setJobListings] = useState<CompanyJobListing[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [showJobs, setShowJobs] = useState(false);
+  const [enriching, setEnriching] = useState(false);
   const { token } = useAuth();
 
   const handleCompanyCreated = (company: Company) => {
@@ -61,6 +62,46 @@ export default function AdminCompaniesPage() {
     }
   };
 
+  const handleJobEnriched = async () => {
+    // Refresh job listings after enrichment
+    if (selectedCompany?._id) {
+      await handleGetJobs();
+    }
+  };
+
+  const handleEnrich = async () => {
+    if (!selectedCompany?._id) return;
+
+    setEnriching(true);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/companies/${selectedCompany._id}/lookup-details`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to enrich company");
+      }
+
+      const enrichedCompany = await response.json();
+      toast.success(
+        `Successfully enriched ${enrichedCompany.name} with Apollo.io data`
+      );
+
+      // Update the selected company with enriched data
+      setSelectedCompany(enrichedCompany);
+    } catch (error: any) {
+      console.error("Enrich error:", error);
+      toast.error(error.message || "Failed to enrich company");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   // Check if company has description or industries (indicators of enrichment)
   const isEnriched =
     selectedCompany &&
@@ -68,7 +109,7 @@ export default function AdminCompaniesPage() {
       (selectedCompany.industries && selectedCompany.industries.length > 0));
 
   return (
-    <div className="container mx-auto py-8 space-y-6">
+    <div className="container mx-auto py-8 space-y-6 px-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
@@ -103,18 +144,38 @@ export default function AdminCompaniesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle>Company Details</CardTitle>
-            {isEnriched && (
-              <Button
-                onClick={handleGetJobs}
-                disabled={isLoadingJobs}
-                size="sm"
-                variant="outline"
-                className="gap-2"
-              >
-                <Briefcase className="h-4 w-4" />
-                {isLoadingJobs ? "Loading..." : "Get Jobs"}
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {!selectedCompany.description && (
+                <Button
+                  onClick={handleEnrich}
+                  disabled={enriching}
+                  size="sm"
+                  variant="default"
+                  className="gap-2"
+                >
+                  {enriching ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Enriching...
+                    </>
+                  ) : (
+                    "Enrich"
+                  )}
+                </Button>
+              )}
+              {isEnriched && (
+                <Button
+                  onClick={handleGetJobs}
+                  disabled={isLoadingJobs}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <Briefcase className="h-4 w-4" />
+                  {isLoadingJobs ? "Loading..." : "Get Jobs"}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4">
@@ -172,7 +233,13 @@ export default function AdminCompaniesPage() {
         </Card>
       )}
 
-      {showJobs && <JobListings jobs={jobListings} isLoading={isLoadingJobs} />}
+      {showJobs && (
+        <JobListings
+          jobs={jobListings}
+          isLoading={isLoadingJobs}
+          onJobEnriched={handleJobEnriched}
+        />
+      )}
     </div>
   );
 }

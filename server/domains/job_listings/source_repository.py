@@ -12,7 +12,7 @@ from .source_models import (
     JobListingSourceModel,
     JobListingSourceCreate,
     JobListingSourceResponse,
-    ProviderSourceInfo,
+    ApolloProviderSourceInfo,
 )
 from database import get_collection
 
@@ -101,7 +101,7 @@ class JobListingSourceRepository:
         job_listing_id: str,
         company_id: str,
         provider_name: str,
-        provider_info: ProviderSourceInfo,
+        provider_info: ApolloProviderSourceInfo,
     ) -> JobListingSourceResponse:
         """
         Add or update a provider source for a job listing
@@ -156,7 +156,7 @@ class JobListingSourceRepository:
                 - job_listing_id: Job listing ID
                 - company_id: Company ID
                 - provider_name: Provider name
-                - provider_info: ProviderSourceInfo object
+                - provider_info: ApolloProviderSourceInfo object
 
         Returns:
             Number of sources created or updated

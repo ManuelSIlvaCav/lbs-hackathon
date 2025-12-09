@@ -10,14 +10,34 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CompanyJobListing } from "@/lib/types/company-job-listing";
-import { Calendar, ExternalLink, MapPin } from "lucide-react";
+import {
+  Calendar,
+  ExternalLink,
+  Loader2,
+  MapPin,
+  Sparkles,
+} from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 
 interface JobListingsProps {
   jobs: CompanyJobListing[];
   isLoading?: boolean;
+  onJobEnriched?: () => void;
 }
 
-export function JobListings({ jobs, isLoading }: JobListingsProps) {
+export function JobListings({
+  jobs,
+  isLoading,
+  onJobEnriched,
+}: JobListingsProps) {
+  const handleEnrich = (jobId: string) => {
+    // Notify parent to refresh job listings
+    if (onJobEnriched) {
+      onJobEnriched();
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -58,7 +78,7 @@ export function JobListings({ jobs, isLoading }: JobListingsProps) {
       <CardContent>
         <div className="grid gap-4">
           {jobs.map((job) => (
-            <JobListingCard key={job._id} job={job} />
+            <JobListingCard key={job._id} job={job} onEnrich={handleEnrich} />
           ))}
         </div>
       </CardContent>
@@ -68,9 +88,12 @@ export function JobListings({ jobs, isLoading }: JobListingsProps) {
 
 interface JobListingCardProps {
   job: CompanyJobListing;
+  onEnrich?: (jobId: string) => void;
 }
 
-function JobListingCard({ job }: JobListingCardProps) {
+function JobListingCard({ job, onEnrich }: JobListingCardProps) {
+  const [enriching, setEnriching] = useState(false);
+
   const formatDate = (dateString?: string) => {
     if (!dateString) return null;
     try {
@@ -85,8 +108,103 @@ function JobListingCard({ job }: JobListingCardProps) {
     }
   };
 
+  const formatSalary = (
+    min?: number,
+    max?: number,
+    currency?: string
+  ): string | null => {
+    if (!min && !max) return null;
+
+    const currencySymbol = currency === "USD" ? "$" : currency || "";
+    const formatNumber = (num: number) => {
+      if (num >= 1000) {
+        return `${(num / 1000).toFixed(0)}K`;
+      }
+      return num.toString();
+    };
+
+    if (min && max) {
+      return `${currencySymbol}${formatNumber(
+        min
+      )} - ${currencySymbol}${formatNumber(max)}`;
+    } else if (min) {
+      return `${currencySymbol}${formatNumber(min)}+`;
+    } else if (max) {
+      return `Up to ${currencySymbol}${formatNumber(max)}`;
+    }
+    return null;
+  };
+
+  const getOriginBadgeStyle = (
+    origin?: string
+  ): { bg: string; text: string; border: string } => {
+    switch (origin) {
+      case "linkedin":
+        return {
+          bg: "bg-blue-100 dark:bg-blue-950",
+          text: "text-blue-700 dark:text-blue-300",
+          border: "border-blue-200 dark:border-blue-800",
+        };
+      case "greenhouse":
+        return {
+          bg: "bg-green-100 dark:bg-green-950",
+          text: "text-green-700 dark:text-green-300",
+          border: "border-green-200 dark:border-green-800",
+        };
+      case "workday":
+        return {
+          bg: "bg-orange-100 dark:bg-orange-950",
+          text: "text-orange-700 dark:text-orange-300",
+          border: "border-orange-200 dark:border-orange-800",
+        };
+      case "careers":
+        return {
+          bg: "bg-purple-100 dark:bg-purple-950",
+          text: "text-purple-700 dark:text-purple-300",
+          border: "border-purple-200 dark:border-purple-800",
+        };
+      default:
+        return {
+          bg: "bg-gray-100 dark:bg-gray-800",
+          text: "text-gray-700 dark:text-gray-300",
+          border: "border-gray-200 dark:border-gray-700",
+        };
+    }
+  };
+
+  const handleEnrich = async () => {
+    setEnriching(true);
+    try {
+      const response = await fetch(
+        `http://localhost:8000/api/job-listings/${job._id}/enrich`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to enrich job listing");
+      }
+
+      const enrichedJob = await response.json();
+      toast.success(`Successfully enriched job listing: ${enrichedJob.title}`);
+
+      // Notify parent component to refresh
+      if (onEnrich) {
+        onEnrich(job._id);
+      }
+    } catch (error: any) {
+      console.error("Enrich error:", error);
+      toast.error(error.message || "Failed to enrich job listing");
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   const postedDate = formatDate(job.posted_at);
   const lastSeenDate = formatDate(job.last_seen_at);
+  const isEnriched = job.source_status === "enriched";
 
   return (
     <Card className="hover:shadow-md transition-shadow">
@@ -124,17 +242,101 @@ function JobListingCard({ job }: JobListingCardProps) {
               )}
             </div>
 
-            {/* Provider Badge */}
-            <div>
-              <Badge variant="secondary" className="text-xs">
-                {job.provider}
-              </Badge>
+            {/* Badges */}
+            <div className="flex flex-wrap gap-2">
+              {/* Origin Badge */}
+              {job.origin && (
+                <Badge
+                  variant="outline"
+                  className={`text-xs border ${
+                    getOriginBadgeStyle(job.origin).bg
+                  } ${getOriginBadgeStyle(job.origin).text} ${
+                    getOriginBadgeStyle(job.origin).border
+                  }`}
+                >
+                  {job.origin.charAt(0).toUpperCase() + job.origin.slice(1)}
+                </Badge>
+              )}
+              {isEnriched && (
+                <Badge variant="default" className="text-xs">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  Enriched
+                </Badge>
+              )}
+              {job.employement_type && (
+                <Badge variant="outline" className="text-xs">
+                  {job.employement_type}
+                </Badge>
+              )}
+              {job.work_arrangement && (
+                <Badge variant="outline" className="text-xs">
+                  {job.work_arrangement}
+                </Badge>
+              )}
             </div>
+
+            {/* Salary Range */}
+            {formatSalary(
+              job.salary_range_min,
+              job.salary_range_max,
+              job.salary_currency
+            ) && (
+              <div className="text-sm font-medium text-green-600 dark:text-green-400">
+                💰{" "}
+                {formatSalary(
+                  job.salary_range_min,
+                  job.salary_range_max,
+                  job.salary_currency
+                )}
+              </div>
+            )}
+
+            {/* Profile Categories and Role Titles */}
+            {(job.profile_categories || job.role_titles) && (
+              <div className="space-y-1 text-sm">
+                {job.profile_categories &&
+                  job.profile_categories.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground">
+                        Categories:{" "}
+                      </span>
+                      <span>{job.profile_categories.join(", ")}</span>
+                    </div>
+                  )}
+                {job.role_titles && job.role_titles.length > 0 && (
+                  <div>
+                    <span className="text-muted-foreground">Roles: </span>
+                    <span>{job.role_titles.join(", ")}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Apply Button */}
-          <div className="shrink-0">
-            <Button asChild size="sm">
+          {/* Action Buttons */}
+          <div className="shrink-0 flex flex-col gap-2">
+            {!isEnriched && (
+              <Button
+                onClick={handleEnrich}
+                disabled={enriching}
+                size="sm"
+                variant="default"
+                className="gap-2"
+              >
+                {enriching ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Enriching...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Enrich
+                  </>
+                )}
+              </Button>
+            )}
+            <Button asChild size="sm" variant="outline">
               <a
                 href={job.url}
                 target="_blank"

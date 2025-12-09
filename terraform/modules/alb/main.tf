@@ -4,7 +4,7 @@ resource "aws_alb" "alb" {
   security_groups = [aws_security_group.alb.id]
   subnets         = var.public_subnet_ids
   tags = {
-    Terraform   = "true"
+    Terraform = "true"
   }
 }
 
@@ -19,29 +19,29 @@ resource "aws_alb_target_group" "service_target_group" {
   target_type          = "ip"
 
   health_check {
-      path                  = "/health"
-      protocol              = "HTTP"
-      matcher               = "200"
-      port                  = "traffic-port"
-      timeout               = 15
-      interval              = 30
+    path     = "/health"
+    protocol = "HTTP"
+    matcher  = "200"
+    port     = "traffic-port"
+    timeout  = 15
+    interval = 30
   }
 
   depends_on = [aws_alb.alb]
   tags = {
-    Terraform   = "true"
+    Terraform = "true"
   }
 }
 
 ## SG for ALB
 
 resource "aws_security_group" "alb" {
-  name        = "${var.service_name}_alb_sg_${var.environment}"
-  description = "Security group for ALB"
-  vpc_id      = var.vpc_id
-  revoke_rules_on_delete      = true
+  name                   = "${var.service_name}_alb_sg_${var.environment}"
+  description            = "Security group for ALB"
+  vpc_id                 = var.vpc_id
+  revoke_rules_on_delete = true
   tags = {
-    Terraform   = "true"
+    Terraform = "true"
   }
 
   egress {
@@ -54,33 +54,61 @@ resource "aws_security_group" "alb" {
   }
 
   ingress {
-    from_port                   = 443
-    to_port                     = 443
-    protocol                    = "TCP"
-    description                 = "Allow https inbound traffic from internet HTTPS"
-    cidr_blocks                 = ["0.0.0.0/0"]
-    self                        = true
+    from_port   = 443
+    to_port     = 443
+    protocol    = "TCP"
+    description = "Allow https inbound traffic from internet HTTPS"
+    cidr_blocks = ["0.0.0.0/0"]
+    self        = true
   }
 
   ingress {
-    from_port                   = 80
-    to_port                     = 80
-    protocol                    = "TCP"
-    description                 = "Allow http inbound traffic from internet HTTP"
-    cidr_blocks                 = ["0.0.0.0/0"]
-    self                        = true
+    from_port   = 80
+    to_port     = 80
+    protocol    = "TCP"
+    description = "Allow http inbound traffic from internet HTTP"
+    cidr_blocks = ["0.0.0.0/0"]
+    self        = true
   }
 
 }
 
-#Defines an HTTP Listener for the ALB
-resource "aws_lb_listener" "listener" {
-  load_balancer_arn         = aws_alb.alb.arn
-  port                      = "80"
-  protocol                  = "HTTP"
+# HTTP Listener - Redirects to HTTPS if certificate is provided, otherwise forwards to target group
+resource "aws_lb_listener" "http_listener" {
+  load_balancer_arn = aws_alb.alb.arn
+  port              = "80"
+  protocol          = "HTTP"
 
   default_action {
-    type                    = "forward"
-    target_group_arn        = aws_alb_target_group.service_target_group.arn
+    type = var.certificate_arn != "" ? "redirect" : "forward"
+
+    # Redirect to HTTPS if certificate is configured
+    dynamic "redirect" {
+      for_each = var.certificate_arn != "" ? [1] : []
+      content {
+        port        = "443"
+        protocol    = "HTTPS"
+        status_code = "HTTP_301"
+      }
+    }
+
+    # Forward to target group if no certificate
+    target_group_arn = var.certificate_arn != "" ? null : aws_alb_target_group.service_target_group.arn
   }
 }
+
+# HTTPS Listener - Only created if certificate ARN is provided
+resource "aws_lb_listener" "https_listener" {
+  count             = var.certificate_arn != "" ? 1 : 0
+  load_balancer_arn = aws_alb.alb.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-Res-PQ-2025-09"
+  certificate_arn   = var.certificate_arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_alb_target_group.service_target_group.arn
+  }
+}
+

@@ -62,18 +62,42 @@ resource "aws_ecs_task_definition" "default_definition" {
       ],
       healthCheck = {
         command : [
-          "CMD",
-          "curl -f http://localhost:${var.container_port}/health | grep -q 'ok' || exit 1"
+          "CMD-SHELL",
+          "curl -f http://localhost:${var.container_port}/health || exit 1"
         ],
-        interval    = 30
-        retries     = 3
+        interval    = 180
+        retries     = 2
         timeout     = 5,
-        startPeriod = 30
+        startPeriod = 60
       }
       environment = [
         {
           name  = "PORT"
           value = tostring(var.container_port)
+        },
+        {
+          name  = "MONGODB_DOMAIN"
+          value = var.mongodb_domain
+        },
+        {
+          name  = "MONGODB_USER"
+          value = var.mongodb_user
+        },
+        {
+          name  = "MONGODB_PASSWORD"
+          value = var.mongodb_password
+        },
+        {
+          name  = "MONGODB_DATABASE"
+          value = var.mongodb_database
+        },
+        {
+          name  = "OPENAI_API_KEY"
+          value = var.openai_api_key
+        },
+        {
+          name  = "APOLLO_API_KEY"
+          value = var.apollo_api_key
         }
       ],
       logConfiguration = {

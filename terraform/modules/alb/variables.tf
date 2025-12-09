@@ -33,3 +33,10 @@ variable "vpc_id" {
 variable "public_subnet_ids" {
   type = list(string)
 }
+
+## SSL Certificate
+variable "certificate_arn" {
+  type        = string
+  description = "ARN of the SSL certificate for HTTPS listener"
+  default     = "arn:aws:acm:eu-west-1:142939271009:certificate/721c6dd7-c62e-488f-9622-dacc81c938a1"
+}
