@@ -10,10 +10,12 @@ from domains.job_listings.categories import (
     get_all_role_titles,
 )
 from utils.web_scraper import scrape_job_description
+from openai.types.shared import Reasoning
+
 
 """ TODO """
 # Schema defintions for industries
-#
+
 
 logger = logging.getLogger("app")
 
@@ -33,6 +35,9 @@ class AgentJobCategorizationSchema__JobInfo(BaseModel):
     salary_min: int | None = None
     salary_max: int | None = None
     currency: str | None = None
+
+    experience_bullets: list[str] = []
+    preferred_experience_bullets: list[str] = []
 
 
 class AgentJobCategorizationSchema__ExperienceByRoleItem(BaseModel):
@@ -282,6 +287,80 @@ If no salary information is provided, set salary_min, salary_max, and currency t
 
 Currency always use standard 3 letter ISO currency codes (e.g., USD, EUR, GBP).
 
+== Experience Bullets (MANDATORY EXTRACTION) ==
+You MUST extract the raw, verbatim bullet points from the job description's minimum/required qualifications section. Look for sections titled:
+- "Minimum Qualifications"
+- "Basic Qualifications"  
+- "Requirements"
+- "What You'll Need"
+- "Required Qualifications"
+- "You Must Have"
+- "Essential Requirements"
+
+EXTRACTION RULES:
+1. Copy each bullet point EXACTLY as written in the JD (verbatim, word-for-word)
+2. Do NOT paraphrase, summarize, or rewrite the bullets
+3. Do NOT include bullets from preferred/nice-to-have sections
+4. Include ALL bullets from the minimum requirements section, even if they seem redundant with other fields
+5. If the section uses numbered lists (1., 2., 3.) or bullet points (•, -, *), extract each item as a separate string
+6. Preserve the original wording, but remove the bullet symbol or number prefix
+7. If there are no explicit bullet points but there are requirement statements, extract each distinct requirement statement as a bullet
+
+Example:
+If JD says:
+"Minimum Qualifications:
+• 9+ years of experience building large-scale distributed systems
+• Hands-on experience with Java, Scala, or Python
+• Strong collaboration and communication skills"
+
+You should extract:
+"experience_bullets": [
+  "9+ years of experience building large-scale distributed systems",
+  "Hands-on experience with Java, Scala, or Python", 
+  "Strong collaboration and communication skills"
+]
+
+If there are NO explicit minimum requirements bullets in the JD, set experience_bullets to [].
+NEVER hallucinate or invent bullets that don't exist in the JD.
+
+== Preferred Experience Bullets (MANDATORY EXTRACTION) ==
+You MUST extract the raw, verbatim bullet points from the job description's preferred/nice-to-have qualifications section. Look for sections titled:
+- "Preferred Qualifications"
+- "Nice to Have"
+- "Bonus Qualifications"
+- "Ideal Candidate Has"
+- "We'd Love If You Have"
+- "Additional Qualifications"
+- "Preferred Skills"
+
+EXTRACTION RULES:
+1. Copy each bullet point EXACTLY as written in the JD (verbatim, word-for-word)
+2. Do NOT paraphrase, summarize, or rewrite the bullets
+3. Do NOT include bullets from minimum/required sections
+4. Include ALL bullets from the preferred qualifications section
+5. If the section uses numbered lists or bullet points, extract each item as a separate string
+6. Preserve the original wording, but remove the bullet symbol or number prefix
+7. If there are no explicit bullet points but there are preference statements, extract each distinct preference as a bullet
+8. NEVER duplicate bullets from experience_bullets - preferred bullets must be distinct
+
+Example:
+If JD says:
+"Preferred Qualifications:
+• Experience with AWS and/or GCP
+• Familiarity with Kubernetes and Airflow
+• Experience mentoring junior engineers"
+
+You should extract:
+"preferred_experience_bullets": [
+  "Experience with AWS and/or GCP",
+  "Familiarity with Kubernetes and Airflow",
+  "Experience mentoring junior engineers"
+]
+
+If there are NO explicit preferred qualifications bullets in the JD, set preferred_experience_bullets to [].
+NEVER hallucinate or invent bullets that don't exist in the JD.
+NEVER copy bullets from experience_bullets into preferred_experience_bullets.
+
 == IMPORTANT EXCLUSIONS ==
 You must not extract or classify anything coming from:
 Mission statements
@@ -301,9 +380,15 @@ Read the JD. Actively search for requirement like content in all relevant sectio
 agent_job_categorization = Agent(
     name="Agent Job Categorization",
     instructions=INSTRUCTIONS,
-    model="gpt-4.1-mini",
+    model="gpt-5-nano",
     output_type=AgentJobCategorizationSchema,
-    model_settings=ModelSettings(temperature=1, top_p=1, max_tokens=2048, store=True),
+    model_settings=ModelSettings(
+        # Not supported on reasoning
+        # temperature=0.2,
+        # top_p=0.2,
+        store=True,
+        reasoning=Reasoning(effort="low"),
+    ),
 )
 
 
