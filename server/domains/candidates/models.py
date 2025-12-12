@@ -37,6 +37,9 @@ class CandidateModel(BaseModel):
     )
 
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    user_id: str = Field(
+        ..., description="Reference to user account (MongoDB ObjectId as string)"
+    )
     name: str = Field(..., description="Candidate's full name")
     email: Optional[str] = Field(default=None, description="Candidate's email address")
     metadata: Optional[CandidateMetadata] = Field(
@@ -49,6 +52,7 @@ class CandidateModel(BaseModel):
 class CandidateCreate(BaseModel):
     """Model for creating a new candidate"""
 
+    user_id: str = Field(..., description="Reference to user account")
     name: str = Field(..., min_length=1, description="Candidate's full name")
     email: Optional[str] = Field(default=None, description="Candidate's email address")
 
@@ -71,6 +75,7 @@ class CandidateResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     id: str = Field(alias="_id")
+    user_id: str
     name: str = None
     email: Optional[str] = None
     metadata: Optional[CandidateMetadata] = None

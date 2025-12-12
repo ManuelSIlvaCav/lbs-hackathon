@@ -26,8 +26,6 @@ from .models import (
 from database import get_collection
 from integrations.agents.cv_parser_agent import (
     run_agent_cv_categorization,
-    run_workflow,
-    WorkflowInput,
 )
 
 
@@ -41,6 +39,21 @@ class CandidateRepository:
 
     def __init__(self):
         self.collection: Collection = get_collection("candidates")
+        self._ensure_indexes()
+
+    def _ensure_indexes(self):
+        """Create indexes for better query performance"""
+        try:
+            # Create index on user_id for fast lookups
+            self.collection.create_index(
+                [("user_id", ASCENDING)],
+                name="user_id_index",
+                background=True,
+                unique=True,  # Each user should have only one candidate profile
+            )
+            print("✓ Candidate indexes created successfully")
+        except Exception as e:
+            print(f"Note: Index creation handled by MongoDB: {e}")
 
     def create_candidate(self, candidate_data: CandidateCreate) -> CandidateResponse:
         """
@@ -54,6 +67,7 @@ class CandidateRepository:
         """
         # Create candidate model with timestamps
         candidate = CandidateModel(
+            user_id=candidate_data.user_id,
             name=candidate_data.name,
             email=candidate_data.email,
             created_at=datetime.now(),
@@ -76,6 +90,26 @@ class CandidateRepository:
         inserted_candidate["_id"] = str(inserted_candidate["_id"])
 
         return CandidateResponse(**inserted_candidate)
+
+    def get_candidate_by_user_id(self, user_id: str) -> Optional[CandidateResponse]:
+        """
+        Get a candidate by user_id
+
+        Args:
+            user_id: String representation of user's MongoDB ObjectId
+
+        Returns:
+            CandidateResponse if found, None otherwise
+        """
+        try:
+            candidate = self.collection.find_one({"user_id": user_id})
+            if candidate:
+                candidate["_id"] = str(candidate["_id"])
+                return CandidateResponse(**candidate)
+            return None
+        except Exception as e:
+            print(f"Error getting candidate by user_id: {e}")
+            return None
 
     def get_candidate_by_id(self, candidate_id: str) -> Optional[CandidateResponse]:
         """

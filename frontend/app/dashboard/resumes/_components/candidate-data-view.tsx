@@ -1,5 +1,6 @@
 "use client";
 
+import { EmptyCandidateCV } from "@/components/empty-candidate-cv";
 import { candidateApi } from "@/lib/api/candidate";
 import { Candidate, CategorizationSchema } from "@/lib/types/candidate";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -56,6 +57,9 @@ export function CandidateDataView({
   }
 
   if (error) {
+    if (error.message === "Failed to fetch candidate: Not Found") {
+      return <EmptyCandidateCV />;
+    }
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center space-y-2">
@@ -69,16 +73,7 @@ export function CandidateDataView({
   }
 
   if (candidate && !candidate.metadata?.categorization_schema) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center">
-          <p className="text-muted-foreground">No CV data parsed yet.</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Upload and parse a CV to see categorization data.
-          </p>
-        </div>
-      </div>
-    );
+    return <EmptyCandidateCV />;
   }
 
   if (candidate?.metadata?.categorization_schema) {

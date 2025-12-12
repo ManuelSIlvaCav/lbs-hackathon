@@ -3,12 +3,14 @@ API routes for candidate operations
 """
 
 from typing import List
-from fastapi import APIRouter, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
 import os
 import tempfile
 
 from .models import CandidateCreate, CandidateUpdate, CandidateResponse
 from .repository import candidate_repository
+from domains.auth.routes import get_current_active_user
+from domains.auth.models import UserInDB
 
 
 router = APIRouter(prefix="/api/candidates", tags=["candidates"])
@@ -43,12 +45,24 @@ async def get_candidates(skip: int = 0, limit: int = 100):
 
 
 @router.get("/{candidate_id}", response_model=CandidateResponse)
-async def get_candidate(candidate_id: str):
+async def get_candidate(
+    candidate_id: str,
+    current_user: UserInDB = Depends(get_current_active_user),
+):
     """
     Get a specific candidate by ID
 
+    Requires authentication. Users can only access their own candidate profile.
+
     - **candidate_id**: MongoDB ObjectId as string
     """
+    # Validate that the user is accessing their own candidate profile
+    if current_user.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only access your own profile",
+        )
+
     candidate = candidate_repository.get_candidate_by_id(candidate_id)
     if not candidate:
         raise HTTPException(
@@ -59,15 +73,28 @@ async def get_candidate(candidate_id: str):
 
 
 @router.put("/{candidate_id}", response_model=CandidateResponse)
-async def update_candidate(candidate_id: str, candidate: CandidateUpdate):
+async def update_candidate(
+    candidate_id: str,
+    candidate: CandidateUpdate,
+    current_user: UserInDB = Depends(get_current_active_user),
+):
     """
     Update a candidate
+
+    Requires authentication. Users can only update their own candidate profile.
 
     - **candidate_id**: MongoDB ObjectId as string
     - **name**: Updated candidate name (optional)
     - **email**: Updated candidate email (optional)
     - **metadata**: Updated candidate metadata including CV data (optional)
     """
+    # Validate that the user is updating their own candidate profile
+    if current_user.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own profile",
+        )
+
     updated_candidate = candidate_repository.update_candidate(candidate_id, candidate)
     if not updated_candidate:
         raise HTTPException(
@@ -103,15 +130,28 @@ async def get_candidate_count():
 
 
 @router.post("/{candidate_id}/upload-cv", response_model=CandidateResponse)
-async def upload_and_parse_cv(candidate_id: str, file: UploadFile = File(...)):
+async def upload_and_parse_cv(
+    candidate_id: str,
+    file: UploadFile = File(...),
+    current_user: UserInDB = Depends(get_current_active_user),
+):
     """
     Upload a CV file for a candidate and parse it using the CV parser agent
+
+    Requires authentication. Users can only upload CVs for their own candidate profile.
 
     - **candidate_id**: MongoDB ObjectId as string
     - **file**: CV file (PDF, DOC, DOCX, TXT, RTF)
 
     The CV will be parsed and the categorization schema will be saved to the candidate's metadata.
     """
+    # Validate that the user is uploading to their own candidate profile
+    if current_user.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only upload CVs to your own profile",
+        )
+
     # Validate candidate exists
     candidate = candidate_repository.get_candidate_by_id(candidate_id)
     if not candidate:

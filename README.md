@@ -19,6 +19,10 @@ You can run the server directly running
 
 Make sure to setup an .env file with the necesary credentials based on the env.example
 
+## To test production image
+
+> docker build -f ./server/Dockerfile.prod -t lbs-prod ./server
+
 # Frontend
 
 Easy nextjs app. Make sure to have pnpm as package manager.

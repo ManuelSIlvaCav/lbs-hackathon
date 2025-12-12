@@ -42,6 +42,7 @@ class UserInDB(BaseModel):
     role: UserRole = UserRole.USER
     is_active: bool = True
     created_at: Optional[str] = None
+    candidate_id: Optional[str] = None  # Link to candidate profile
 
 
 class UserResponse(BaseModel):
@@ -52,6 +53,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     role: UserRole
     is_active: bool
+    candidate_id: Optional[str] = None  # Include candidate_id in response
 
 
 class Token(BaseModel):
@@ -60,6 +62,7 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    refresh_token: Optional[str] = None  # Add refresh token support
 
 
 class TokenData(BaseModel):
@@ -67,3 +70,4 @@ class TokenData(BaseModel):
 
     email: Optional[str] = None
     role: Optional[str] = None
+    candidate_id: Optional[str] = None  # Add candidate_id to token payload

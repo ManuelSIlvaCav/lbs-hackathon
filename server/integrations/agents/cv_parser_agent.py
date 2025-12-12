@@ -1,5 +1,6 @@
 from pydantic import BaseModel
-from agents import Agent, ModelSettings, TResponseInputItem, Runner, RunConfig, trace
+from agents import Agent, ModelSettings, Runner
+from openai.types.shared import Reasoning
 from typing import Any, Dict, Optional
 
 from utils.files import file_to_base64
@@ -237,51 +238,13 @@ Example:
 If you do not have enough information to compute any aggregated meta field, leave total_years or total_experience_years as null and use empty arrays where appropriate.
 Final requirement
 Return exactly one JSON object conforming to the configured schema. Do not include any natural language text before or after the JSON.""",
-    model="gpt-4.1-mini",
+    model="gpt-5-nano",
     output_type=AgentCvCategorizationSchema,
-    model_settings=ModelSettings(temperature=1, top_p=1, max_tokens=2048, store=True),
+    model_settings=ModelSettings(
+        store=True,
+        reasoning=Reasoning(effort="low"),
+    ),
 )
-
-
-class WorkflowInput(BaseModel):
-    input_as_text: str
-
-
-# Main code entrypoint
-async def run_workflow(workflow_input: WorkflowInput):
-    with trace("New workflow"):
-        state = {}
-        workflow = workflow_input.model_dump()
-        conversation_history: list[TResponseInputItem] = [
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": workflow["input_as_text"]}],
-            }
-        ]
-        agent_cv_categorization_result_temp = await Runner.run(
-            agent_cv_categorization,
-            input=[*conversation_history],
-            run_config=RunConfig(
-                trace_metadata={
-                    "_trace_source_": "agent-builder",
-                    "workflow_id": "wf_69207b0b8e988190b2f668b227731e7d0278f4f4a4aac1a9",
-                }
-            ),
-        )
-
-        conversation_history.extend(
-            [
-                item.to_input_item()
-                for item in agent_cv_categorization_result_temp.new_items
-            ]
-        )
-
-        agent_cv_categorization_result = {
-            "output_text": agent_cv_categorization_result_temp.final_output.json(),
-            "output_parsed": agent_cv_categorization_result_temp.final_output.model_dump(),
-        }
-
-        return agent_cv_categorization_result
 
 
 async def run_agent_cv_categorization(cv_file_path: str) -> Optional[Dict[str, Any]]:

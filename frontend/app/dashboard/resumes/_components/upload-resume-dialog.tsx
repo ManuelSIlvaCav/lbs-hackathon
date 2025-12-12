@@ -31,7 +31,9 @@ export function UploadResumeDialog({ candidateId }: UploadResumeDialogProps) {
   // Upload and parse CV mutation
   const uploadMutation = useMutation({
     mutationFn: (file: File) =>
-      candidateApi.uploadAndParseCV(candidateId, file),
+      candidateApi.uploadAndParseCV(candidateId, file, {
+        authStrategy: "refresh", // Auto-refresh token on 401 error
+      }),
     onSuccess: async (updatedCandidate) => {
       // Update the query cache with the new candidate data
       queryClient.setQueryData(["candidate", candidateId], updatedCandidate);

@@ -55,6 +55,7 @@ class UserRepository:
             "role": user_create.role.value,
             "is_active": True,
             "created_at": datetime.now().isoformat(),
+            "candidate_id": None,  # Will be set when candidate profile is created
         }
 
         # Insert into database
@@ -69,6 +70,7 @@ class UserRepository:
             role=UserRole(user_dict["role"]),
             is_active=user_dict["is_active"],
             created_at=user_dict["created_at"],
+            candidate_id=user_dict.get("candidate_id"),
         )
 
     def get_user_by_email(self, email: str) -> Optional[UserInDB]:
@@ -94,6 +96,7 @@ class UserRepository:
             role=UserRole(user_doc.get("role", "user")),
             is_active=user_doc.get("is_active", True),
             created_at=user_doc.get("created_at"),
+            candidate_id=user_doc.get("candidate_id"),
         )
 
     def get_user_by_id(self, user_id: str) -> Optional[UserInDB]:
@@ -122,7 +125,24 @@ class UserRepository:
             role=UserRole(user_doc.get("role", "user")),
             is_active=user_doc.get("is_active", True),
             created_at=user_doc.get("created_at"),
+            candidate_id=user_doc.get("candidate_id"),
         )
+
+    def update_candidate_id(self, user_id: str, candidate_id: str) -> bool:
+        """
+        Update user's candidate_id after candidate profile is created
+
+        Args:
+            user_id: User ID
+            candidate_id: Candidate ID to link
+
+        Returns:
+            True if updated successfully
+        """
+        result = self.collection.update_one(
+            {"_id": ObjectId(user_id)}, {"$set": {"candidate_id": candidate_id}}
+        )
+        return result.modified_count > 0
 
 
 # Singleton instance

@@ -1,5 +1,7 @@
 Using FastAPI
 
+# Running the server
+
 Recommended using UV for package manager - https://pypi.org/project/uv/
 
 Virtual env
@@ -7,6 +9,14 @@ Virtual env
 > uv venv
 
 > source .venv/bin/activate
+
+# Dependencies
+
+OpenAI
+https://platform.openai.com
+
+Apollo.io
+https://app.apollo.io
 
 # Costs on OpenAI
 
