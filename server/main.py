@@ -1,63 +1,20 @@
-import json
 import os
 import logging
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from logging.config import dictConfig
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from datetime import datetime
+from logger import load_logger
 
 
 # Load environment variables
 load_dotenv()
-
-
-# Custom JSON formatter
-class JsonFormatter(logging.Formatter):
-    def format(self, record):
-        log_record = {
-            "timestamp": datetime.now().isoformat(),
-            "level": record.levelname,
-            "logger": record.name,
-            "module": record.module,
-            "line": record.lineno,
-            "message": record.getMessage(),
-        }
-
-        # Add exception info if available
-        if record.exc_info:
-            log_record["exception"] = self.formatException(record.exc_info)
-
-        return json.dumps(log_record)
-
-
-# Define the logging configuration
-log_config = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {"json": {"()": JsonFormatter}},
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "level": "INFO",
-            "formatter": "json",
-            "stream": "ext://sys.stdout",
-        },
-    },
-    "loggers": {
-        "app": {"handlers": ["console"], "level": "INFO", "propagate": False},
-    },
-    "root": {"handlers": ["console"], "level": "INFO"},
-}
-
-dictConfig(log_config)
+load_logger("app")
 
 # Create a logger instance
 logger = logging.getLogger("app")
 
 # Import modules after logging configuration is set up
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from database import db_manager
 from domains.candidates.routes import router as candidates_router
 from domains.job_listings.routes import router as job_listings_router
@@ -71,11 +28,11 @@ from routes.automation import router as automation_router
 async def lifespan(app: FastAPI):
     """Lifespan context manager for startup and shutdown events"""
     # Startup
-    logger.info("🚀 Starting application...")
+    logger.info("🚀 Starting application...", extra={"context": "lifespan"})
     db_manager.connect()
     yield
     # Shutdown
-    logger.info("🛑 Shutting down application...")
+    logger.info("🛑 Shutting down application...", extra={"context": "lifespan"})
 
 
 app = FastAPI(

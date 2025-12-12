@@ -122,19 +122,6 @@ async def delete_job_listing(job_listing_id: str):
     return None
 
 
-@router.get("/stats/count")
-async def get_job_listing_count(
-    status_filter: Optional[str] = Query(None, alias="status")
-):
-    """
-    Get total count of job listings
-
-    - **status**: Optional status filter
-    """
-    count = job_listing_repository.get_job_listing_count(status=status_filter)
-    return {"count": count}
-
-
 @router.post("/{job_listing_id}/enrich", response_model=JobListingModel)
 async def enrich_job_listing(job_listing_id: str):
     """

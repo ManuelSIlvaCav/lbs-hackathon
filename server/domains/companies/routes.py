@@ -216,29 +216,46 @@ async def get_company_job_listings(
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
 
+    logger.info(
+        "Fetching job listings for company",
+        extra={
+            "context": "company_job_listings",
+            "company_id": company_id,
+            "force_refresh": force_refresh,
+        },
+    )
+
     # Try to get cached job listings first (unless force refresh requested)
     if not force_refresh:
         try:
-            logger.info(f"Checking cached job listings for company {company_id}")
+            logger.info(
+                f"Checking cached job listings",
+                extra={"context": "company_job_listings", "company_id": company_id},
+            )
             cached_job_listings = job_listing_repository.get_job_listings_by_company(
                 company_id
             )
             if cached_job_listings:
                 logger.info(
-                    f"Returning {len(cached_job_listings)} cached job listings for company {company_id}"
+                    f"Returning cached job listings for company",
+                    extra={
+                        "context": "company_job_listings",
+                        "company_id": company_id,
+                        "len_cached_job_listings": len(cached_job_listings),
+                    },
                 )
                 return cached_job_listings
+            return []
         except Exception as e:
             logger.error(
-                f"Failed to fetch cached job listings returning empty: {str(e)}"
+                "Failed to fetch cached job listings returning empty",
+                extra={
+                    "context": "company_job_listings",
+                    "company_id": company_id,
+                    "error_msg": str(e),
+                },
             )
             return []
-
-    # No cached listings or force refresh - fetch from provider
-    logger.info(
-        f"Fetching fresh job listings from provider for company {company_id}"
-        + (" (force refresh)" if force_refresh else " (no cache)")
-    )
 
     # Get latest enrichment to find provider company ID
     enrichment = data_processor_repository.get_latest_enrichment(company_id)
@@ -261,11 +278,23 @@ async def get_company_job_listings(
     # Call provider to get job listings (this will also save them to the database)
     try:
         logger.info(
-            f"Fetching job listings for company {company_id} (provider ID: {provider_company_id})"
+            "Fetching fresh job listings from provider",
+            extra={
+                "context": "company_job_listings",
+                "company_id": company_id,
+                "provider_company_id": provider_company_id,
+            },
         )
         job_listings = provider_get_job_listings(company_id, provider_company_id)
+
         logger.info(
-            f"Retrieved and saved {len(job_listings)} job listings for company {company_id}"
+            "Returning job listings",
+            extra={
+                "context": "company_job_listings",
+                "company_id": company_id,
+                "provider_company_id": provider_company_id,
+                "count": len(job_listings),
+            },
         )
 
         return job_listings

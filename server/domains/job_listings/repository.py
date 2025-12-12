@@ -79,6 +79,7 @@ class JobListingRepository:
         self.collection.create_index("company_id")
         self.collection.create_index("last_seen_at")
         self.collection.create_index([("origin", ASCENDING)])
+        self.collection.create_index("url")  # Index for URL-based lookups
 
     async def create_job_listing(self, job_data: JobListingCreate) -> JobListingModel:
         """
@@ -273,21 +274,6 @@ class JobListingRepository:
             print(f"Error deleting job listing: {e}")
             return False
 
-    def get_job_listing_count(self, status: Optional[str] = None) -> int:
-        """
-        Get total count of job listings
-
-        Args:
-            status: Optional status filter
-
-        Returns:
-            Total number of job listings
-        """
-        query = {}
-        if status:
-            query["status"] = status
-        return self.collection.count_documents(query)
-
     def save_job_listing(self, job_data: JobListingCreate) -> str:
         """
         Save a single job listing (used by enrichment system)
@@ -348,14 +334,14 @@ class JobListingRepository:
         return job_listing_ids
 
     def get_job_listings_by_company(
-        self, company_id: str, provider: str = "apollo"
+        self,
+        company_id: str,
     ) -> List[JobListingModel]:
         """
         Get all job listings for a company
 
         Args:
             company_id: Company ID to filter by
-            provider: Provider to filter by (default: "apollo")
 
         Returns:
             List of JobListingModel objects
@@ -417,18 +403,6 @@ class JobListingRepository:
             if not parsed_job:
                 print(f"Failed to parse job description for: {job_id}")
                 return None
-
-            # Print the agent result
-            print("=" * 80)
-            print("AGENT ENRICHMENT RESULT:")
-            print(f"Job ParsedData: {parsed_job}")
-            print(f"Job Title: {parsed_job.job_info.job_title}")
-            print(f"Profile Categories: {parsed_job.job_info.profile_categories}")
-            print(f"Role Titles: {parsed_job.job_info.role_titles}")
-            print(f"Employment Type: {parsed_job.job_info.employement_type}")
-            print(f"Work Arrangement: {parsed_job.job_info.work_arrangement}")
-            print(f"Description Summary: {parsed_job.description_summary}")
-            print("=" * 80)
 
             # Create metadata object for storage in sources
             metadata = JobListingMetadata(categorization_schema=parsed_job)
@@ -502,6 +476,138 @@ class JobListingRepository:
 
         except Exception as e:
             print(f"Error enriching job listing {job_id}: {e}")
+            return None
+
+    def upsert_job_listings_bulk(
+        self,
+        company_id: str,
+        job_listings: List[JobListingCreate],
+    ) -> tuple[List[str], List[str], int]:
+        """
+        Upsert multiple job listings in bulk with smart update logic:
+        - New jobs (by URL): Insert
+        - Existing jobs (by URL): Update last_seen_at and posted_at
+        - Missing jobs: Mark as expired (not in current response)
+
+        Args:
+            company_id: Company ID to filter by
+            job_listings: List of JobListingCreate objects from provider
+
+        Returns:
+            tuple: (list of inserted IDs, list of updated IDs, count of expired jobs)
+        """
+        if not job_listings:
+            return [], [], 0
+
+        # Get current job URLs from provider response
+        current_urls = {job.url for job in job_listings if job.url}
+
+        # Get existing job listings for this company
+        existing_jobs = self.collection.find(
+            {"company_id": company_id, "url": {"$exists": True}}
+        )
+        existing_jobs_map = {job["url"]: job for job in existing_jobs}
+
+        inserted_ids = []
+        updated_ids = []
+
+        # Process each job listing from provider
+        for job_data in job_listings:
+            if not job_data.url:
+                continue
+
+            # Extract origin fields
+            existing_job = existing_jobs_map.get(job_data.url)
+
+            if existing_job:
+                # UPDATE: Job already exists, update timestamps
+                update_fields = {
+                    "last_seen_at": datetime.now(),
+                    "updated_at": datetime.now(),
+                    "status": "active",  # Reactivate if it was expired
+                }
+
+                # Update posted_at if provided and different
+                if job_data.posted_at:
+                    update_fields["posted_at"] = job_data.posted_at
+
+                # Update other fields if they've changed
+                if job_data.title and job_data.title != existing_job.get("title"):
+                    update_fields["title"] = job_data.title
+                if job_data.location and job_data.location != existing_job.get(
+                    "location"
+                ):
+                    update_fields["location"] = job_data.location
+                if job_data.city:
+                    update_fields["city"] = job_data.city
+                if job_data.state:
+                    update_fields["state"] = job_data.state
+                if job_data.country:
+                    update_fields["country"] = job_data.country
+
+                result = self.collection.update_one(
+                    {"_id": existing_job["_id"]}, {"$set": update_fields}
+                )
+
+                if result.modified_count > 0:
+                    updated_ids.append(str(existing_job["_id"]))
+
+            else:
+                origin_domain = extract_domain(job_data.url)
+                origin = determine_origin(origin_domain)
+                # INSERT: New job listing
+                job_dict = job_data.model_dump()
+                job_dict["company_id"] = company_id
+                job_dict["created_at"] = datetime.now()
+                job_dict["updated_at"] = datetime.now()
+                job_dict["last_seen_at"] = datetime.now()
+                job_dict["status"] = "active"
+                job_dict["origin_domain"] = origin_domain
+                job_dict["origin"] = origin
+
+                result = self.collection.insert_one(job_dict)
+                inserted_ids.append(str(result.inserted_id))
+
+        # EXPIRE: Mark jobs not in current response as expired
+        # Only expire jobs that are currently active
+        expired_result = self.collection.update_many(
+            {
+                "company_id": company_id,
+                "url": {"$nin": list(current_urls), "$exists": True},
+                "status": "active",
+            },
+            {"$set": {"status": "expired", "updated_at": datetime.now()}},
+        )
+
+        expired_count = expired_result.modified_count
+
+        return inserted_ids, updated_ids, expired_count
+
+    def get_job_listing_by_url(
+        self, url: str, company_id: Optional[str] = None
+    ) -> Optional[JobListingModel]:
+        """
+        Get a job listing by URL
+
+        Args:
+            url: Job listing URL
+            company_id: Optional company_id to narrow search
+
+        Returns:
+            JobListingModel if found, None otherwise
+        """
+        try:
+            query = {"url": url}
+            if company_id:
+                query["company_id"] = company_id
+
+            job = self.collection.find_one(query)
+            if job:
+                job["_id"] = str(job["_id"])
+                return JobListingModel(**job)
+            return None
+        except Exception as e:
+            print(f"Error getting job listing by URL: {e}")
             return None
 
 

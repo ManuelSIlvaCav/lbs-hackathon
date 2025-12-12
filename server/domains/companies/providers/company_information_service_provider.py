@@ -164,70 +164,142 @@ class InformationServiceContext:
             # Continue even if save fails
             return []
 
-        # Save individual job listings to job_listings collection
+        # Sync job listings with smart upsert logic
         if job_enrichment_id:
-            try:
-                job_listing_creates = []
-                for job in job_listings:
-                    # Extract only JobListingCreate-compatible fields (exclude provider fields)
-                    job_create_data = {
-                        k: v
-                        for k, v in job.items()
-                        if k not in ["provider", "provider_job_id"]
-                    }
-                    job_create = JobListingCreate(
-                        company_id=company_id,
-                        **job_create_data,
-                    )
-                    job_listing_creates.append(job_create)
+            return self._sync_job_listings(
+                company_id=company_id,
+                job_listings=job_listings,
+                job_enrichment_id=job_enrichment_id,
+            )
 
-                if job_listing_creates:
-                    saved_ids = job_listing_repository.save_job_listings_bulk(
-                        job_listing_creates
+        return []
+
+    def _sync_job_listings(
+        self,
+        company_id: str,
+        job_listings: List[Dict[str, Any]],
+        job_enrichment_id: str,
+    ) -> List[JobListingModel]:
+        """
+        Sync job listings with smart upsert logic:
+        1. Insert new jobs (by URL)
+        2. Update existing jobs (last_seen_at, posted_at)
+        3. Mark missing jobs as expired
+
+        Args:
+            company_id: Internal company ID
+            job_listings: List of job listing dicts from provider
+            job_enrichment_id: ID of the job enrichment record
+
+        Returns:
+            List of JobListingModel objects from database
+        """
+        try:
+            # Prepare JobListingCreate objects
+            job_listing_creates = []
+            url_to_provider_data = {}  # Map URL to provider-specific data
+
+            for job in job_listings:
+                # Extract only JobListingCreate-compatible fields
+                job_create_data = {
+                    k: v
+                    for k, v in job.items()
+                    if k not in ["provider", "provider_job_id"]
+                }
+                job_create = JobListingCreate(**job_create_data)
+                job_listing_creates.append(job_create)
+
+                # Store provider-specific data for source tracking
+                url_to_provider_data[job["url"]] = {
+                    "provider_job_id": job["provider_job_id"],
+                    "url": job["url"],
+                    "last_seen_at": job.get("last_seen_at"),
+                }
+
+            if not job_listing_creates:
+                logger.warning(
+                    f"No valid job listings to sync for company {company_id}"
+                )
+                return []
+
+            # Upsert job listings with smart logic
+            inserted_ids, updated_ids, expired_count = (
+                job_listing_repository.upsert_job_listings_bulk(
+                    company_id=company_id,
+                    job_listings=job_listing_creates,
+                )
+            )
+
+            logger.info(
+                f"Job sync results for company {company_id}: "
+                f"{len(inserted_ids)} inserted, {len(updated_ids)} updated, {expired_count} expired"
+            )
+
+            # Save/update sources for inserted and updated jobs
+            try:
+                sources_data = []
+
+                # Process inserted jobs
+                for job_id in inserted_ids:
+                    job = job_listing_repository.get_job_listing_by_id(job_id)
+                    if job and job.url in url_to_provider_data:
+                        provider_data = url_to_provider_data[job.url]
+                        provider_info = ApolloProviderSourceInfo(
+                            job_enrichment_id=job_enrichment_id,
+                            provider_job_id=provider_data["provider_job_id"],
+                            url=provider_data["url"],
+                            first_seen_at=datetime.now(),
+                            last_seen_at=provider_data.get("last_seen_at") or None,
+                        )
+                        sources_data.append(
+                            {
+                                "job_listing_id": job_id,
+                                "company_id": company_id,
+                                "provider_name": self._provider.provider_name,
+                                "provider_info": provider_info,
+                            }
+                        )
+
+                # Process updated jobs
+                for job_id in updated_ids:
+                    job = job_listing_repository.get_job_listing_by_id(job_id)
+                    if job and job.url in url_to_provider_data:
+                        provider_data = url_to_provider_data[job.url]
+                        provider_info = ApolloProviderSourceInfo(
+                            job_enrichment_id=job_enrichment_id,
+                            provider_job_id=provider_data["provider_job_id"],
+                            url=provider_data["url"],
+                            first_seen_at=datetime.now(),  # Will be preserved if exists
+                            last_seen_at=provider_data.get("last_seen_at")
+                            or datetime.now(),
+                        )
+                        sources_data.append(
+                            {
+                                "job_listing_id": job_id,
+                                "company_id": company_id,
+                                "provider_name": self._provider.provider_name,
+                                "provider_info": provider_info,
+                            }
+                        )
+
+                if sources_data:
+                    count = job_listing_source_repository.add_or_update_provider_sources_bulk(
+                        sources_data
                     )
                     logger.info(
-                        f"Saved {len(saved_ids)} individual job listings to job_listings collection for company {company_id}"
+                        f"Saved/updated {count} job listing sources for company {company_id}"
                     )
 
-                    # Save the sources for the job listings in bulk
-                    try:
-                        sources_data = []
-                        for idx, job in enumerate(job_listings):
-                            provider_info = ApolloProviderSourceInfo(
-                                job_enrichment_id=job_enrichment_id,
-                                provider_job_id=job["provider_job_id"],
-                                url=job["url"],
-                                first_seen_at=datetime.now(),
-                                last_seen_at=job.get("last_seen_at") or datetime.now(),
-                            )
-                            sources_data.append(
-                                {
-                                    "job_listing_id": saved_ids[idx],
-                                    "company_id": company_id,
-                                    "provider_name": self._provider.provider_name,
-                                    "provider_info": provider_info,
-                                }
-                            )
-
-                        if sources_data:
-                            count = job_listing_source_repository.add_or_update_provider_sources_bulk(
-                                sources_data
-                            )
-                            logger.info(
-                                f"Saved {count} job listing sources for company {company_id}"
-                            )
-                    except Exception as e:
-                        logger.error(f"Failed to save job listing sources: {str(e)}")
-                        # Continue even if save fails
-
-                    # Return the saved listings from the database
-                    return job_listing_repository.get_job_listings_by_company(
-                        company_id, self._provider.provider_name
-                    )
             except Exception as e:
-                logger.error(f"Failed to save individual job listings: {str(e)}")
-                # Continue even if save fails
-                return []
+                logger.error(f"Failed to save job listing sources: {str(e)}")
+                # Continue even if source save fails
+
+            # Return all active job listings for this company
+            return job_listing_repository.get_job_listings_by_company(company_id)
+
+        except Exception as e:
+            logger.error(f"Failed to sync job listings: {str(e)}")
+            return []
 
     def _map_job_listings_to_standard(
         self, raw_response: Dict[str, Any]
