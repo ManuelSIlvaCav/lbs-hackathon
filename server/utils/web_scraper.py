@@ -35,8 +35,6 @@ async def scrape_job_description(job_url: str, timeout: int = 60000) -> Optional
             # Create a new page
             page = await context.new_page()
 
-            print(f"Loading job URL: {job_url}")
-
             # Navigate to the URL and wait for network to be idle
             await page.goto(job_url, wait_until="domcontentloaded", timeout=timeout)
 
@@ -58,11 +56,9 @@ async def scrape_job_description(job_url: str, timeout: int = 60000) -> Optional
             for selector in selectors_to_try:
                 try:
                     await page.wait_for_selector(selector, timeout=3000)
-                    print(f"Found content container: {selector}")
                     break
                 except PlaywrightTimeoutError:
                     continue
-            print("Proceeding to extract text content...")
 
             # Extract all visible text from the page
             # Remove script and style elements first
@@ -92,9 +88,7 @@ async def scrape_job_description(job_url: str, timeout: int = 60000) -> Optional
             await browser.close()
 
             if text_content and len(text_content) > 100:
-                print(
-                    f"Successfully scraped {len(text_content)} characters from {job_url}"
-                )
+
                 return text_content
             else:
                 print(f"Warning: Scraped text is too short ({len(text_content)} chars)")

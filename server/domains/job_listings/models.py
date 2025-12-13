@@ -57,12 +57,14 @@ class JobListingOrigin(str, Enum):
 class JobListingStatus(str, Enum):
     ACTIVE = "active"
     EXPIRED = "expired"
+    CREATED = "created"
 
 
 class JobListingSourceStatus(str, Enum):
     ENRICHED = "enriched"
     SCRAPPED = "scrapped"
     ACTIVE = "active"
+    DEACTIVATED = "deactivated"
 
 
 class JobListingModel(BaseModel):
@@ -79,8 +81,8 @@ class JobListingModel(BaseModel):
     url: str = Field(..., description="URL of the job listing")
     title: Optional[str] = Field(default=None, description="Job title")
     company: Optional[str] = Field(default=None, description="Company name")
-    company_id: Optional[str] = Field(
-        default=None, description="Reference to company document"
+    company_id: Optional[PyObjectId] = Field(
+        default=None, description="Reference to company document (ObjectId)"
     )
     location: Optional[str] = Field(default=None, description="Job location")
     city: Optional[str] = Field(default=None, description="City")
@@ -117,12 +119,12 @@ class JobListingModel(BaseModel):
         default=None, description="Work arrangement (e.g., Remote, On-site, Hybrid)"
     )
     listing_status: Optional[JobListingStatus] = Field(
-        default=JobListingStatus.ACTIVE,
+        default=JobListingStatus.CREATED,
         description="Status of the job listing (e.g., active, expired)",
     )
     source_status: Optional[JobListingSourceStatus] = Field(
         default=JobListingSourceStatus.SCRAPPED,
-        description="Status of the job listing source (e.g., enriched, scrapped, active)",
+        description="Status of the job listing source (e.g., enriched, scrapped)",
     )
     salary_range_min: Optional[float] = Field(
         default=None, description="Minimum salary for the job listing"
@@ -145,8 +147,8 @@ class JobListingCreate(BaseModel):
     url: str = Field(..., min_length=1, description="URL of the job listing")
     title: str = Field(..., description="Job title")
     company: Optional[str] = Field(default=None, description="Company name")
-    company_id: Optional[str] = Field(
-        default=None, description="Reference to company document"
+    company_id: Optional[PyObjectId] = Field(
+        default=None, description="Reference to company document (ObjectId)"
     )
     location: Optional[str] = Field(default=None, description="Job location")
     city: Optional[str] = Field(default=None, description="City")

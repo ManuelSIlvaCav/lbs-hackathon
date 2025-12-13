@@ -408,11 +408,11 @@ def find_category_by_role_title(role_title: str) -> str | None:
 
 
 def get_all_role_titles() -> List[str]:
-    """Get a flat list of all role titles across all categories"""
+    """Get a flat list of all unique role titles across all categories"""
     all_roles = []
     for roles in PROFILE_CATEGORIES.values():
         all_roles.extend(roles)
-    return all_roles
+    return sorted(list(set(all_roles)))
 
 
 def is_valid_employment_type(employment_type: str) -> bool:

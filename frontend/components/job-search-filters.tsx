@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Company } from "@/contexts/admin-company-context";
+import { useJobSearchFilters } from "@/contexts/job-search-filters-context";
 import { Search, X } from "lucide-react";
 
 interface JobSearchFiltersProps {
@@ -17,10 +18,14 @@ interface JobSearchFiltersProps {
   selectedCountry: string;
   selectedCity: string;
   selectedOrigin: string;
+  selectedProfileCategory: string;
+  selectedRoleTitle: string;
   onCompanyChange: (company: Company | null) => void;
   onCountryChange: (country: string) => void;
   onCityChange: (city: string) => void;
   onOriginChange: (origin: string) => void;
+  onProfileCategoryChange: (category: string) => void;
+  onRoleTitleChange: (roleTitle: string) => void;
   onSearch: () => void;
   onClear: () => void;
 }
@@ -77,13 +82,19 @@ export function JobSearchFilters({
   selectedCountry,
   selectedCity,
   selectedOrigin,
+  selectedProfileCategory,
+  selectedRoleTitle,
   onCompanyChange,
   onCountryChange,
   onCityChange,
   onOriginChange,
+  onProfileCategoryChange,
+  onRoleTitleChange,
   onSearch,
   onClear,
 }: JobSearchFiltersProps) {
+  const { searchOptions, isLoading } = useJobSearchFilters();
+
   // Get cities for selected country
   const cities =
     selectedCountry &&
@@ -108,8 +119,26 @@ export function JobSearchFilters({
     onOriginChange(origin === "all" ? "" : origin);
   };
 
+  const handleProfileCategoryChange = (category: string) => {
+    const actualCategory = category === "all" ? "" : category;
+    onProfileCategoryChange(actualCategory);
+    // Clear role title if category changes
+    if (actualCategory !== selectedProfileCategory && selectedRoleTitle) {
+      onRoleTitleChange("");
+    }
+  };
+
+  const handleRoleTitleChange = (roleTitle: string) => {
+    onRoleTitleChange(roleTitle === "all" ? "" : roleTitle);
+  };
+
   const hasActiveFilters =
-    selectedCompany || selectedCountry || selectedCity || selectedOrigin;
+    selectedCompany ||
+    selectedCountry ||
+    selectedCity ||
+    selectedOrigin ||
+    selectedProfileCategory ||
+    selectedRoleTitle;
 
   return (
     <div className="border-b bg-background px-6 py-6">
@@ -194,15 +223,62 @@ export function JobSearchFilters({
             <Select
               value={selectedOrigin || "all"}
               onValueChange={handleOriginChange}
+              disabled={isLoading}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select source..." />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sources</SelectItem>
-                {JOB_ORIGINS.map((origin) => (
-                  <SelectItem key={origin.value} value={origin.value}>
-                    {origin.label}
+                {searchOptions?.origins.map((origin) => (
+                  <SelectItem key={origin} value={origin}>
+                    {origin.charAt(0).toUpperCase() + origin.slice(1)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Profile Category */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium font-inter">
+              Profile Category
+            </label>
+            <Select
+              value={selectedProfileCategory || "all"}
+              onValueChange={handleProfileCategoryChange}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select category..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {searchOptions?.profile_categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Role Title */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium font-inter">Role Title</label>
+            <Select
+              value={selectedRoleTitle || "all"}
+              onValueChange={handleRoleTitleChange}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select role..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {searchOptions?.role_titles.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {role}
                   </SelectItem>
                 ))}
               </SelectContent>

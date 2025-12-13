@@ -1,6 +1,7 @@
 "use client";
 
 import { CompanyCombobox } from "@/components/company-combobox";
+import { JobListingDetailsDialog } from "@/components/job-listing-details-dialog";
 import { JobListings } from "@/components/job-listings";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,8 @@ export default function AdminCompaniesPage() {
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [showJobs, setShowJobs] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { token } = useAuth();
 
   const handleCompanyCreated = (company: Company) => {
@@ -67,6 +70,11 @@ export default function AdminCompaniesPage() {
     if (selectedCompany?._id) {
       await handleGetJobs();
     }
+  };
+
+  const handleJobCardClick = (job: JobListing) => {
+    setSelectedJob(job);
+    setIsDialogOpen(true);
   };
 
   const handleEnrich = async () => {
@@ -238,8 +246,16 @@ export default function AdminCompaniesPage() {
           jobs={jobListings}
           isLoading={isLoadingJobs}
           onJobEnriched={handleJobEnriched}
+          isAdmin={true}
+          onCardClick={handleJobCardClick}
         />
       )}
+
+      <JobListingDetailsDialog
+        job={selectedJob}
+        open={isDialogOpen}
+        onOpenChange={setIsDialogOpen}
+      />
     </div>
   );
 }

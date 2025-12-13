@@ -18,6 +18,8 @@ export default function JobListingsPage() {
   const [selectedCountry, setSelectedCountry] = useState("");
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedOrigin, setSelectedOrigin] = useState("");
+  const [selectedProfileCategory, setSelectedProfileCategory] = useState("");
+  const [selectedRoleTitle, setSelectedRoleTitle] = useState("");
 
   // Ref for infinite scroll observer
   const observerTarget = useRef<HTMLDivElement>(null);
@@ -38,6 +40,8 @@ export default function JobListingsPage() {
       selectedCountry,
       selectedCity,
       selectedOrigin,
+      selectedProfileCategory,
+      selectedRoleTitle,
     ],
     queryFn: ({ pageParam = 0 }) =>
       jobListingApi.searchJobListings({
@@ -45,6 +49,8 @@ export default function JobListingsPage() {
         country: selectedCountry || undefined,
         city: selectedCity || undefined,
         origin: selectedOrigin || undefined,
+        profile_category: selectedProfileCategory || undefined,
+        role_title: selectedRoleTitle || undefined,
         skip: pageParam,
         limit: 20,
       }),
@@ -84,6 +90,8 @@ export default function JobListingsPage() {
       country: selectedCountry,
       city: selectedCity,
       origin: selectedOrigin,
+      profileCategory: selectedProfileCategory,
+      roleTitle: selectedRoleTitle,
     });
   };
 
@@ -92,6 +100,8 @@ export default function JobListingsPage() {
     setSelectedCountry("");
     setSelectedCity("");
     setSelectedOrigin("");
+    setSelectedProfileCategory("");
+    setSelectedRoleTitle("");
   };
 
   // Flatten all pages into single array
@@ -120,10 +130,14 @@ export default function JobListingsPage() {
         selectedCountry={selectedCountry}
         selectedCity={selectedCity}
         selectedOrigin={selectedOrigin}
+        selectedProfileCategory={selectedProfileCategory}
+        selectedRoleTitle={selectedRoleTitle}
         onCompanyChange={setSelectedCompany}
         onCountryChange={setSelectedCountry}
         onCityChange={setSelectedCity}
         onOriginChange={setSelectedOrigin}
+        onProfileCategoryChange={setSelectedProfileCategory}
+        onRoleTitleChange={setSelectedRoleTitle}
         onSearch={handleSearch}
         onClear={handleClearFilters}
       />

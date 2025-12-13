@@ -2,6 +2,7 @@ import { ConditionalSidebar } from "@/components/conditional-sidebar";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider } from "@/contexts/auth-context";
+import { JobSearchFiltersProvider } from "@/contexts/job-search-filters-context";
 import type { Metadata } from "next";
 import { Inter, Sora } from "next/font/google";
 import "./globals.css";
@@ -35,8 +36,10 @@ export default function RootLayout({
       >
         <AuthProvider>
           <QueryProvider>
-            <ConditionalSidebar>{children}</ConditionalSidebar>
-            <Toaster />
+            <JobSearchFiltersProvider>
+              <ConditionalSidebar>{children}</ConditionalSidebar>
+              <Toaster />
+            </JobSearchFiltersProvider>
           </QueryProvider>
         </AuthProvider>
       </body>

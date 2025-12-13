@@ -22,6 +22,7 @@ from domains.applications.routes import router as applications_router
 from domains.companies.routes import router as companies_router
 from domains.auth.routes import router as auth_router
 from routes.automation import router as automation_router
+from migrations.migrate_company_id_to_objectid import migrate_company_id_to_objectid
 
 
 @asynccontextmanager
@@ -30,6 +31,8 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting application...", extra={"context": "lifespan"})
     db_manager.connect()
+    """ TODO : Remove this migration after running once """
+    migrate_company_id_to_objectid()
     yield
     # Shutdown
     logger.info("🛑 Shutting down application...", extra={"context": "lifespan"})

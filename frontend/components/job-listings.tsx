@@ -26,12 +26,16 @@ interface JobListingsProps {
   jobs: JobListing[];
   isLoading?: boolean;
   onJobEnriched?: () => void;
+  isAdmin?: boolean;
+  onCardClick?: (job: JobListing) => void;
 }
 
 export function JobListings({
   jobs,
   isLoading,
   onJobEnriched,
+  isAdmin,
+  onCardClick,
 }: JobListingsProps) {
   const handleEnrich = (jobId: string) => {
     // Notify parent to refresh job listings
@@ -80,7 +84,13 @@ export function JobListings({
       <CardContent>
         <div className="grid gap-4">
           {jobs.map((job) => (
-            <JobListingCard key={job._id} job={job} onEnrich={handleEnrich} />
+            <JobListingCard
+              key={job._id}
+              job={job}
+              onEnrich={handleEnrich}
+              isAdmin={isAdmin}
+              onCardClick={onCardClick}
+            />
           ))}
         </div>
       </CardContent>
@@ -91,9 +101,16 @@ export function JobListings({
 interface JobListingCardProps {
   job: JobListing;
   onEnrich?: (jobId: string) => void;
+  isAdmin?: boolean;
+  onCardClick?: (job: JobListing) => void;
 }
 
-export function JobListingCard({ job, onEnrich }: JobListingCardProps) {
+export function JobListingCard({
+  job,
+  onEnrich,
+  isAdmin,
+  onCardClick,
+}: JobListingCardProps) {
   const [enriching, setEnriching] = useState(false);
 
   const formatDate = (dateString?: string | null) => {
@@ -209,7 +226,12 @@ export function JobListingCard({ job, onEnrich }: JobListingCardProps) {
   const isEnriched = job.source_status === "enriched";
 
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card
+      className={`hover:shadow-md transition-shadow ${
+        isAdmin && onCardClick ? "cursor-pointer" : ""
+      }`}
+      onClick={() => isAdmin && onCardClick && onCardClick(job)}
+    >
       <CardContent className="pt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-3">
@@ -286,12 +308,6 @@ export function JobListingCard({ job, onEnrich }: JobListingCardProps) {
                   }`}
                 >
                   {job.origin.charAt(0).toUpperCase() + job.origin.slice(1)}
-                </Badge>
-              )}
-              {isEnriched && (
-                <Badge variant="default" className="text-xs">
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  Enriched
                 </Badge>
               )}
               {job.employement_type && (

@@ -163,6 +163,34 @@ class CompanyRepository:
             updated_at=result.get("updated_at"),
         )
 
+    def get_followed_company_ids(self) -> list:
+        """
+        Get all company IDs that are followed by at least one candidate.
+
+        Returns:
+            List[ObjectId]: List of company ObjectIds that have at least one follower
+        """
+        from domains.candidates.repository import candidate_repository
+
+        # Get all companies that are followed by at least one candidate
+        followed_companies = candidate_repository.collection.aggregate(
+            [
+                # Unwind the followed_companies array
+                {"$unwind": "$followed_companies"},
+                # Group by company_id to get unique companies
+                {
+                    "$group": {
+                        "_id": "$followed_companies.company_id",
+                        "follower_count": {"$sum": 1},
+                    }
+                },
+                # Sort by follower count descending
+                {"$sort": {"follower_count": -1}},
+            ]
+        )
+
+        return [doc["_id"] for doc in followed_companies]
+
 
 # Singleton instance
 company_repository = CompanyRepository()

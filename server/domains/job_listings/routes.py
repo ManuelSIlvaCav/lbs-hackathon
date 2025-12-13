@@ -11,9 +11,14 @@ from .models import (
     JobListingUpdate,
     JobListingModel,
     PaginatedJobListingResponse,
+    JobListingOrigin,
 )
 from .repository import job_listing_repository
 from .tasks import test_print_company_jobs
+from .categories import (
+    get_all_profile_categories,
+    get_all_role_titles,
+)
 
 
 router = APIRouter(prefix="/api/job-listings", tags=["job-listings"])
@@ -82,6 +87,10 @@ async def search_job_listings(
     origin: Optional[str] = Query(
         None, description="Filter by origin (linkedin, greenhouse, workday, careers)"
     ),
+    profile_category: Optional[str] = Query(
+        None, description="Filter by profile category"
+    ),
+    role_title: Optional[str] = Query(None, description="Filter by role title"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=100, description="Maximum records to return"),
 ):
@@ -95,6 +104,8 @@ async def search_job_listings(
     - **country**: Filter by country
     - **city**: Filter by city
     - **origin**: Filter by origin (linkedin, greenhouse, workday, careers)
+    - **profile_category**: Filter by profile category
+    - **role_title**: Filter by role title
     - **skip**: Number of records to skip (default: 0)
     - **limit**: Maximum records to return (default: 100, max: 100)
 
@@ -106,6 +117,8 @@ async def search_job_listings(
             country=country,
             city=city,
             origin=origin,
+            profile_category=profile_category,
+            role_title=role_title,
             skip=skip,
             limit=limit,
         )
@@ -123,6 +136,44 @@ async def search_job_listings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search job listings: {str(e)}",
+        )
+
+
+@router.get("/search-options", response_model=dict)
+async def get_search_options():
+    """
+    Get all available search filter options for job listings
+
+    Returns all distinct values for:
+    - origins: Job sources (linkedin, greenhouse, workday, careers)
+    - profile_categories: Job profile categories
+    - role_titles: Specific role titles
+
+    This endpoint is used to populate search filter dropdowns in the frontend.
+
+    Returns:
+        dict: Object containing arrays of available filter options
+    """
+    try:
+        # Get all profile categories
+        profile_categories = get_all_profile_categories()
+
+        # Get all role titles (already sorted and deduplicated)
+        role_titles = get_all_role_titles()
+
+        # Get all origins from enum
+        origins = [origin.value for origin in JobListingOrigin]
+
+        return {
+            "origins": origins,
+            "profile_categories": sorted(profile_categories),
+            "role_titles": role_titles,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch search options: {str(e)}",
         )
 
 

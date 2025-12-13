@@ -8,6 +8,8 @@ export const jobListingApi = {
     country?: string;
     city?: string;
     origin?: string;
+    profile_category?: string;
+    role_title?: string;
     skip?: number;
     limit?: number;
   }): Promise<PaginatedJobListingResponse> => {
@@ -16,6 +18,8 @@ export const jobListingApi = {
     if (params?.country) searchParams.append("country", params.country);
     if (params?.city) searchParams.append("city", params.city);
     if (params?.origin) searchParams.append("origin", params.origin);
+    if (params?.profile_category) searchParams.append("profile_category", params.profile_category);
+    if (params?.role_title) searchParams.append("role_title", params.role_title);
     if (params?.skip !== undefined) searchParams.append("skip", params.skip.toString());
     if (params?.limit !== undefined) searchParams.append("limit", params.limit.toString());
 

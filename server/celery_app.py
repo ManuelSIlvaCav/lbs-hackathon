@@ -2,11 +2,13 @@
 Celery application configuration for background task processing
 """
 
+import logging
 import os
 import sys
 from pathlib import Path
 from celery import Celery
 from dotenv import load_dotenv
+from logger import load_logger
 
 # Add the current directory to Python path to ensure modules can be imported
 # This is especially important for Celery workers
@@ -16,6 +18,10 @@ if str(current_dir) not in sys.path:
 
 # Load environment variables
 load_dotenv()
+load_logger("app")
+
+# Create a logger instance
+logger = logging.getLogger("app")
 
 # Get Redis configuration from environment
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
@@ -74,11 +80,30 @@ celery_app.autodiscover_tasks(
 )
 
 # Optional: Define periodic tasks (Celery Beat)
+from celery.schedules import crontab
+
 celery_app.conf.beat_schedule = {
     # Example: Run a task every hour
     # "refresh-job-listings": {
     #     "task": "domains.job_listings.tasks.refresh_all_job_listings",
     #     "schedule": 3600.0,  # Every hour
+    # },
+    # Refresh job listings for followed companies daily at 5 AM London time
+    # Uncomment to enable scheduled execution
+    # "refresh-followed-companies-job-listings": {
+    #     "task": "domains.companies.tasks.refresh_companies_job_listings",
+    #     "schedule": crontab(hour=5, minute=0),  # 5:00 AM UTC (London time in winter)
+    #     # Note: For British Summer Time (UTC+1), use hour=4 instead
+    #     # Or set timezone="Europe/London" and use hour=5
+    # },
+    # Enrich job listings for followed companies daily at 6 AM London time
+    # Runs after refresh task to enrich newly fetched listings
+    # Uncomment to enable scheduled execution
+    # "enrich-followed-companies-job-listings": {
+    #     "task": "domains.companies.tasks.enrich_job_listings",
+    #     "schedule": crontab(hour=6, minute=0),  # 6:00 AM UTC (London time in winter)
+    #     # Note: For British Summer Time (UTC+1), use hour=5 instead
+    #     # Or set timezone="Europe/London" and use hour=6
     # },
 }
 

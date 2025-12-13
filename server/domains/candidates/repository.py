@@ -54,6 +54,12 @@ class CandidateRepository:
                 background=True,
                 unique=True,  # Each user should have only one candidate profile
             )
+            # Create index on followed_companies.company_id for fast lookups
+            self.collection.create_index(
+                [("followed_companies.company_id", ASCENDING)],
+                name="followed_companies_company_id_index",
+                background=True,
+            )
             print("✓ Candidate indexes created successfully")
         except Exception as e:
             print(f"Note: Index creation handled by MongoDB: {e}")
@@ -348,6 +354,130 @@ class CandidateRepository:
 
         except Exception as e:
             print(f"Error running CV parser: {e}")
+            return None
+
+    def follow_company(
+        self, candidate_id: str, company_id: str
+    ) -> Optional[CandidateResponse]:
+        """
+        Add a company to the candidate's followed companies list
+
+        Args:
+            candidate_id: String representation of candidate's MongoDB ObjectId
+            company_id: String representation of company's MongoDB ObjectId
+
+        Returns:
+            Updated CandidateResponse if successful, None otherwise
+        """
+        try:
+            from .models import FollowedCompany
+
+            # Convert company_id to ObjectId
+            company_oid = (
+                ObjectId(company_id) if isinstance(company_id, str) else company_id
+            )
+
+            print(
+                f"Following company - candidate_id: {candidate_id}, company_id: {company_id}, company_oid: {company_oid}"
+            )
+
+            # Check if already following
+            existing = self.collection.find_one(
+                {
+                    "_id": ObjectId(candidate_id),
+                    "followed_companies.company_id": company_oid,
+                }
+            )
+
+            if existing:
+                # Already following, return current state
+                print("Already following this company")
+                return self.get_candidate_by_id(candidate_id)
+
+            # Add to followed companies
+            # Store company_id as ObjectId directly, not as string
+            followed_company_doc = {
+                "company_id": company_oid,  # Store as ObjectId
+                "followed_at": datetime.now(),
+            }
+
+            print(f"Following company dict to be pushed: {followed_company_doc}")
+
+            result: UpdateResult = self.collection.update_one(
+                {"_id": ObjectId(candidate_id)},
+                {
+                    "$push": {"followed_companies": followed_company_doc},
+                    "$set": {"updated_at": datetime.now()},
+                },
+            )
+
+            print(
+                f"Follow result - matched: {result.matched_count}, modified: {result.modified_count}"
+            )
+
+            if result.modified_count > 0:
+                return self.get_candidate_by_id(candidate_id)
+
+            return None
+
+        except Exception as e:
+            print(f"Error following company: {e}")
+            return None
+
+    def unfollow_company(
+        self, candidate_id: str, company_id: str
+    ) -> Optional[CandidateResponse]:
+        """
+        Remove a company from the candidate's followed companies list
+
+        Args:
+            candidate_id: String representation of candidate's MongoDB ObjectId
+            company_id: String representation of company's MongoDB ObjectId
+
+        Returns:
+            Updated CandidateResponse if successful, None otherwise
+        """
+        try:
+            # Convert company_id to ObjectId
+            company_oid = (
+                ObjectId(company_id) if isinstance(company_id, str) else company_id
+            )
+
+            print(
+                f"Unfollowing company - candidate_id: {candidate_id}, company_id: {company_id}, company_oid: {company_oid}"
+            )
+
+            # Check current state before unfollowing
+            candidate_before = self.collection.find_one({"_id": ObjectId(candidate_id)})
+            if candidate_before:
+                print(
+                    f"Candidate before unfollow: {candidate_before.get('followed_companies', [])}"
+                )
+
+            # Remove from followed companies
+            result: UpdateResult = self.collection.update_one(
+                {"_id": ObjectId(candidate_id)},
+                {
+                    "$pull": {"followed_companies": {"company_id": company_oid}},
+                    "$set": {"updated_at": datetime.now()},
+                },
+            )
+
+            print(
+                f"Unfollow result - matched: {result.matched_count}, modified: {result.modified_count}"
+            )
+
+            if result.modified_count > 0:
+                return self.get_candidate_by_id(candidate_id)
+
+            # Even if not modified (wasn't following), return current state
+            return self.get_candidate_by_id(candidate_id)
+
+        except Exception as e:
+            print(f"Error unfollowing company: {e}")
+            import traceback
+
+            traceback.print_exc()
             return None
 
 

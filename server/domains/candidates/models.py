@@ -15,6 +15,28 @@ PyObjectId = Annotated[str, BeforeValidator(str)]
 
 
 # ============================================================================
+# Followed Company Model
+# ============================================================================
+
+
+class FollowedCompany(BaseModel):
+    """Model for a company followed by a candidate"""
+
+    company_id: PyObjectId = Field(
+        ..., description="Reference to company (MongoDB ObjectId)"
+    )
+    followed_at: datetime = Field(
+        default_factory=datetime.now, description="When the company was followed"
+    )
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, datetime: lambda v: v.isoformat() if v else None},
+    )
+
+
+# ============================================================================
 # Search Preferences Models
 # ============================================================================
 
@@ -85,9 +107,6 @@ class SearchPreferences(BaseModel):
         default=None,
         description="Preferred company sizes (e.g., 'Startup', 'Scale-up', 'Enterprise')",
     )
-    followed_companies: Optional[List[str]] = Field(
-        default=None, description="List of company IDs to follow"
-    )
     hidden_companies: Optional[List[str]] = Field(
         default=None, description="List of company IDs to hide"
     )
@@ -127,6 +146,9 @@ class CandidateModel(BaseModel):
     search_preferences: Optional[SearchPreferences] = Field(
         default=None, description="Job search preferences and filters"
     )
+    followed_companies: Optional[List[FollowedCompany]] = Field(
+        default=None, description="List of companies followed by the candidate"
+    )
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -165,6 +187,7 @@ class CandidateResponse(BaseModel):
     email: Optional[str] = None
     metadata: Optional[CandidateMetadata] = None
     search_preferences: Optional[SearchPreferences] = None
+    followed_companies: Optional[List[FollowedCompany]] = None
     created_at: datetime
     updated_at: datetime
 

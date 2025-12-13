@@ -14,6 +14,7 @@ interface User {
   full_name?: string;
   role: "user" | "admin";
   is_active: boolean;
+  candidate_id?: string;
 }
 
 interface AuthContextType {

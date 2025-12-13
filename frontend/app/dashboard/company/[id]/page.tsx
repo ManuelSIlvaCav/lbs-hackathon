@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/contexts/auth-context";
 import { JobListing } from "@/lib/types/job-listing";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   ExternalLink,
@@ -16,7 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 interface Company {
@@ -32,12 +33,29 @@ interface Company {
   updated_at: string;
 }
 
+interface FollowedCompany {
+  company_id: string;
+  followed_at: string;
+}
+
+interface Candidate {
+  _id: string;
+  user_id: string;
+  name: string;
+  email?: string;
+  followed_companies?: FollowedCompany[];
+  created_at: string;
+  updated_at: string;
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export default function CompanyDetailPage() {
   const params = useParams();
   const companyId = params.id as string;
-  const [isSaved, setIsSaved] = useState(false);
+  const { user, token } = useAuth();
+  const queryClient = useQueryClient();
+  const [isFollowing, setIsFollowing] = useState(false);
 
   // Fetch company details
   const {
@@ -57,6 +75,42 @@ export default function CompanyDetailPage() {
     },
   });
 
+  // Fetch candidate data to check followed companies
+  const { data: candidate } = useQuery<Candidate>({
+    queryKey: ["candidate", user?.candidate_id],
+    queryFn: async () => {
+      if (!user?.candidate_id || !token) {
+        throw new Error("Not authenticated");
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/candidates/${user.candidate_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to fetch candidate");
+      }
+      return response.json();
+    },
+    enabled: !!user?.candidate_id && !!token,
+  });
+
+  // Check if user is following this company based on candidate data
+  useEffect(() => {
+    if (candidate?.followed_companies) {
+      const isCurrentlyFollowing = candidate.followed_companies.some(
+        (fc) => fc.company_id === companyId
+      );
+      setIsFollowing(isCurrentlyFollowing);
+    } else {
+      setIsFollowing(false);
+    }
+  }, [candidate, companyId]);
+
   // Fetch company job listings
   const {
     data: jobListings,
@@ -75,14 +129,87 @@ export default function CompanyDetailPage() {
     },
   });
 
-  const handleSaveToFavorites = () => {
-    // TODO: Implement save to favorites functionality
-    setIsSaved(!isSaved);
-    toast.success(
-      isSaved
-        ? "Removed from favorites"
-        : `${company?.name} saved to favorites!`
-    );
+  // Follow mutation
+  const followMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.candidate_id || !token) {
+        throw new Error("You must be logged in to follow companies");
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/candidates/${user.candidate_id}/follow/${companyId}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to follow company");
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      // Update the candidate query cache with the new data
+      queryClient.setQueryData(["candidate", user?.candidate_id], data);
+      toast.success(`Following ${company?.name}!`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to follow company");
+    },
+  });
+
+  // Unfollow mutation
+  const unfollowMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.candidate_id || !token) {
+        throw new Error("You must be logged in to unfollow companies");
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/candidates/${user.candidate_id}/follow/${companyId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || "Failed to unfollow company");
+      }
+
+      return response.json();
+    },
+    onSuccess: (data) => {
+      // Update the candidate query cache with the new data
+      queryClient.setQueryData(["candidate", user?.candidate_id], data);
+      toast.success(`Unfollowed ${company?.name}`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || "Failed to unfollow company");
+    },
+  });
+
+  const handleToggleFollow = () => {
+    if (!user?.candidate_id) {
+      toast.error("You must be logged in to follow companies");
+      return;
+    }
+
+    if (isFollowing) {
+      unfollowMutation.mutate();
+    } else {
+      followMutation.mutate();
+    }
   };
 
   const formatDate = (dateString?: string) => {
@@ -173,15 +300,22 @@ export default function CompanyDetailPage() {
                   {company.name}
                 </h1>
                 <Button
-                  variant={isSaved ? "default" : "outline"}
+                  variant={isFollowing ? "default" : "outline"}
                   size="sm"
-                  onClick={handleSaveToFavorites}
+                  onClick={handleToggleFollow}
+                  disabled={
+                    followMutation.isPending || unfollowMutation.isPending
+                  }
                   className="gap-2"
                 >
-                  <Heart
-                    className={`h-4 w-4 ${isSaved ? "fill-current" : ""}`}
-                  />
-                  {isSaved ? "Saved" : "Save"}
+                  {followMutation.isPending || unfollowMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Heart
+                      className={`h-4 w-4 ${isFollowing ? "fill-current" : ""}`}
+                    />
+                  )}
+                  {isFollowing ? "Following" : "Follow"}
                 </Button>
               </div>
 

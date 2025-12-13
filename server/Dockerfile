@@ -25,7 +25,7 @@ RUN pip install uv
 # Install Python dependencies
 RUN uv pip install --system -r pyproject.toml
 
-#RUN playwright install chromium --with-deps
+RUN playwright install chromium --with-deps
 
 # Copy application code
 COPY . .

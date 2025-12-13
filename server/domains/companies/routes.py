@@ -16,6 +16,7 @@ from .providers.provider import (
     provider_search_companies,
     provider_get_job_listings,
 )
+from .tasks import refresh_companies_job_listings, enrich_job_listings
 
 import logging
 
@@ -303,4 +304,77 @@ async def get_company_job_listings(
         logger.error(f"Failed to fetch job listings for company {company_id}: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Failed to fetch job listings: {str(e)}"
+        )
+
+
+@router.post("/refresh-followed-job-listings", response_model=dict)
+async def trigger_refresh_followed_companies():
+    """
+    Manually trigger refresh of job listings for all followed companies
+
+    This endpoint triggers the background task that:
+    1. Finds all companies followed by at least one candidate
+    2. Fetches fresh job listings from the provider for each company
+    3. Updates the database with new job listings
+
+    The task runs asynchronously. Use the returned task_id to check status.
+
+    Returns:
+        dict: Task information including task_id and status
+    """
+    try:
+        logger.info("Manually triggering refresh_companies_job_listings task")
+
+        # Trigger the Celery task asynchronously
+        task = refresh_companies_job_listings.apply_async()
+
+        return {
+            "message": "Job listing refresh task started",
+            "task_id": task.id,
+            "status": "pending",
+            "info": "Task is running in the background. Check task status using the task_id.",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to trigger refresh task: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger refresh task: {str(e)}"
+        )
+
+
+@router.post("/enrich-followed-job-listings", response_model=dict)
+async def trigger_enrich_followed_companies():
+    """
+    Manually trigger enrichment of job listings for all followed companies
+
+    This endpoint triggers the background task that:
+    1. Finds all companies followed by at least one candidate
+    2. Gets job listings with source_status null or 'scraped' (limited to 15 for development)
+    3. Enriches job listings in batches of 10 using AI parsing
+    4. Extracts structured data (requirements, skills, categories, etc.)
+
+    The task uses rate limiting and batch processing to avoid overwhelming the API.
+    The task runs asynchronously. Use the returned task_id to check status.
+
+    Returns:
+        dict: Task information including task_id and status
+    """
+    try:
+        logger.info("Manually triggering enrich_job_listings task")
+
+        # Trigger the Celery task asynchronously
+        task = enrich_job_listings.apply_async()
+
+        return {
+            "message": "Job listing enrichment task started",
+            "task_id": task.id,
+            "status": "pending",
+            "info": "Task is running in the background. Check task status using the task_id.",
+            "note": "Processing in batches of 10 to respect rate limits. Limited to 15 listings per company in development.",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to trigger enrichment task: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to trigger enrichment task: {str(e)}"
         )

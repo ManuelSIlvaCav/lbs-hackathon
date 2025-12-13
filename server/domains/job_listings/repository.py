@@ -3,6 +3,8 @@ Repository for job listing operations
 Uses the shared job_listings collection from CompanyRepository
 """
 
+import logging
+import time
 from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
@@ -24,6 +26,9 @@ from integrations.agents.job_listing_parser_agent import (
     JobCategorizationInput,
     run_agent_job_categorization,
 )
+
+
+logger = logging.getLogger("app")
 
 
 def extract_domain(url: str) -> str:
@@ -80,6 +85,7 @@ class JobListingRepository:
         self.collection.create_index("last_seen_at")
         self.collection.create_index([("origin", ASCENDING)])
         self.collection.create_index("url")  # Index for URL-based lookups
+        self.collection.create_index("source_status")  # Index for status filtering
 
     async def create_job_listing(self, job_data: JobListingCreate) -> JobListingModel:
         """
@@ -188,18 +194,10 @@ class JobListingRepository:
                 {
                     "$lookup": {
                         "from": "companies",
-                        "let": {"company_id_str": {"$toString": "$company_id"}},
+                        "localField": "company_id",
+                        "foreignField": "_id",
+                        "as": "company_info_array",
                         "pipeline": [
-                            {
-                                "$match": {
-                                    "$expr": {
-                                        "$eq": [
-                                            {"$toString": "$_id"},
-                                            "$$company_id_str",
-                                        ]
-                                    }
-                                }
-                            },
                             {
                                 "$project": {
                                     "_id": 1,
@@ -213,7 +211,6 @@ class JobListingRepository:
                                 }
                             },
                         ],
-                        "as": "company_info_array",
                     }
                 },
                 {
@@ -280,15 +277,10 @@ class JobListingRepository:
             {
                 "$lookup": {
                     "from": "companies",
-                    "let": {"company_id_str": {"$toString": "$company_id"}},
+                    "localField": "company_id",
+                    "foreignField": "_id",
+                    "as": "company_info_array",
                     "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$eq": [{"$toString": "$_id"}, "$$company_id_str"]
-                                }
-                            }
-                        },
                         {
                             "$project": {
                                 "_id": 1,
@@ -302,7 +294,6 @@ class JobListingRepository:
                             }
                         },
                     ],
-                    "as": "company_info_array",
                 }
             }
         )
@@ -404,6 +395,10 @@ class JobListingRepository:
         job_dict = job_data.model_dump()
         job_dict["created_at"] = datetime.now()
 
+        # Convert company_id to ObjectId if present
+        if job_dict.get("company_id") and isinstance(job_dict["company_id"], str):
+            job_dict["company_id"] = ObjectId(job_dict["company_id"])
+
         # Extract and set origin fields
         if job_data.url:
             origin_domain = extract_domain(job_data.url)
@@ -435,6 +430,10 @@ class JobListingRepository:
             job_dict = job_data.model_dump()
             job_dict["created_at"] = datetime.now()
 
+            # Convert company_id to ObjectId if present
+            if job_dict.get("company_id") and isinstance(job_dict["company_id"], str):
+                job_dict["company_id"] = ObjectId(job_dict["company_id"])
+
             # Extract and set origin fields
             if job_data.url:
                 origin_domain = extract_domain(job_data.url)
@@ -462,7 +461,11 @@ class JobListingRepository:
         Returns:
             List of JobListingModel objects
         """
-        cursor = self.collection.find({"company_id": company_id}).sort(
+        # Convert company_id string to ObjectId for query
+        company_oid = (
+            ObjectId(company_id) if isinstance(company_id, str) else company_id
+        )
+        cursor = self.collection.find({"company_id": company_oid}).sort(
             "last_seen_at", -1
         )
 
@@ -512,12 +515,29 @@ class JobListingRepository:
                 return None
 
             # Run the agent to extract structured data
-            print(f"Enriching job listing: {job.title} ({job_id})")
+            logger.info(
+                "Enriching job listing",
+                extra={
+                    "context": "enrich_job_listings",
+                    "job_listing_id": job_id,
+                    "job_title": job.title,
+                    "company_name": job.company_id,
+                },
+            )
             categorization_input = JobCategorizationInput(job_url=job.url)
             parsed_job = await run_agent_job_categorization(categorization_input)
 
             if not parsed_job:
-                print(f"Failed to parse job description for: {job_id}")
+
+                logger.error(
+                    "Failed to parse job description",
+                    extra={
+                        "context": "enrich_job_listings",
+                        "job_listing_id": job_id,
+                        "job_title": job.title,
+                        "company_name": job.company,
+                    },
+                )
                 return None
 
             # Create metadata object for storage in sources
@@ -541,9 +561,7 @@ class JobListingRepository:
                         }
                     },
                 )
-                print(
-                    f"Updated job_listings_source with agent metadata for job {job_id} and result: {update_result}"
-                )
+
             else:
                 # Create new source document with agent metadata
                 if job.company_id:
@@ -562,9 +580,6 @@ class JobListingRepository:
                             "created_at": datetime.now(),
                             "updated_at": datetime.now(),
                         }
-                    )
-                    print(
-                        f"Created new job_listings_source with agent metadata for job {job_id}"
                     )
 
             # Update the job listing with enriched data (WITHOUT metadata)
@@ -585,13 +600,27 @@ class JobListingRepository:
             )
 
             if result.modified_count == 0:
-                print(f"No changes made to job listing: {job_id}")
+                logger.warning(
+                    "No updates made to job listing after enrichment",
+                    extra={
+                        "context": "enrich_job_listings",
+                        "job_listing_id": job_id,
+                    },
+                )
 
             # Return the updated job listing
             return self.get_job_listing_by_id(job_id)
 
         except Exception as e:
             print(f"Error enriching job listing {job_id}: {e}")
+            logger.error(
+                "Error enriching job listing",
+                extra={
+                    "context": "enrich_job_listings",
+                    "job_listing_id": job_id,
+                    "error": str(e),
+                },
+            )
             return None
 
     def upsert_job_listings_bulk(
@@ -618,9 +647,14 @@ class JobListingRepository:
         # Get current job URLs from provider response
         current_urls = {job.url for job in job_listings if job.url}
 
+        # Convert company_id to ObjectId for queries
+        company_oid = (
+            ObjectId(company_id) if isinstance(company_id, str) else company_id
+        )
+
         # Get existing job listings for this company
         existing_jobs = self.collection.find(
-            {"company_id": company_id, "url": {"$exists": True}}
+            {"company_id": company_oid, "url": {"$exists": True}}
         )
         existing_jobs_map = {job["url"]: job for job in existing_jobs}
 
@@ -673,7 +707,10 @@ class JobListingRepository:
                 origin = determine_origin(origin_domain)
                 # INSERT: New job listing
                 job_dict = job_data.model_dump()
-                job_dict["company_id"] = company_id
+                # Convert company_id to ObjectId
+                job_dict["company_id"] = (
+                    ObjectId(company_id) if isinstance(company_id, str) else company_id
+                )
                 job_dict["created_at"] = datetime.now()
                 job_dict["updated_at"] = datetime.now()
                 job_dict["last_seen_at"] = datetime.now()
@@ -688,7 +725,7 @@ class JobListingRepository:
         # Only expire jobs that are currently active
         expired_result = self.collection.update_many(
             {
-                "company_id": company_id,
+                "company_id": company_oid,
                 "url": {"$nin": list(current_urls), "$exists": True},
                 "status": "active",
             },
@@ -732,6 +769,8 @@ class JobListingRepository:
         country: Optional[str] = None,
         city: Optional[str] = None,
         origin: Optional[str] = None,
+        profile_category: Optional[str] = None,
+        role_title: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> tuple[List[JobListingModel], int]:
@@ -744,6 +783,8 @@ class JobListingRepository:
             country: Optional country to filter by
             city: Optional city to filter by
             origin: Optional origin to filter by (linkedin, greenhouse, workday, careers)
+            profile_category: Optional profile category to filter by
+            role_title: Optional role title to filter by
             skip: Number of documents to skip
             limit: Maximum number of documents to return
 
@@ -751,113 +792,138 @@ class JobListingRepository:
             Tuple of (list of JobListingModel objects, total count)
         """
         # Build match stage based on filters
-        match_stage = {}
+        try:
+            match_stage = {"source_status": {"$eq": "enriched"}}
 
-        if company_id:
-            match_stage["company_id"] = company_id
+            if company_id:
+                # Convert company_id string to ObjectId for query
+                match_stage["company_id"] = (
+                    ObjectId(company_id) if isinstance(company_id, str) else company_id
+                )
 
-        if country:
-            match_stage["country"] = country
+            if country:
+                match_stage["country"] = country
 
-        if city:
-            match_stage["city"] = city
+            if city:
+                match_stage["city"] = city
 
-        if origin:
-            match_stage["origin"] = origin
+            if origin:
+                match_stage["origin"] = origin
 
-        # Build aggregation pipeline with $facet for efficient pagination
-        pipeline = []
+            if profile_category:
+                match_stage["profile_categories"] = profile_category
 
-        # Add match stage if we have filters
-        if match_stage:
-            pipeline.append({"$match": match_stage})
+            if role_title:
+                match_stage["role_titles"] = role_title
 
-        # Add sort stage (most recent first)
-        pipeline.append({"$sort": {"created_at": -1}})
+            # Build aggregation pipeline with $facet for efficient pagination
+            pipeline = []
 
-        # Add $lookup stage to join company information
-        pipeline.append(
-            {
-                "$lookup": {
-                    "from": "companies",
-                    "let": {"company_id_str": {"$toString": "$company_id"}},
-                    "pipeline": [
-                        {
-                            "$match": {
-                                "$expr": {
-                                    "$eq": [{"$toString": "$_id"}, "$$company_id_str"]
+            # Add match stage if we have filters
+            if match_stage:
+                pipeline.append({"$match": match_stage})
+
+            # Add sort stage (most recent first)
+            pipeline.append({"$sort": {"created_at": -1}})
+
+            # Add $lookup stage to join company information
+            pipeline.append(
+                {
+                    "$lookup": {
+                        "from": "companies",
+                        "localField": "company_id",
+                        "foreignField": "_id",
+                        "as": "company_info_array",
+                        "pipeline": [
+                            {
+                                "$project": {
+                                    "_id": 1,
+                                    "name": 1,
+                                    "company_url": 1,
+                                    "linkedin_url": 1,
+                                    "logo_url": 1,
+                                    "domain": 1,
+                                    "industries": 1,
+                                    "description": 1,
                                 }
-                            }
-                        },
-                        {
-                            "$project": {
-                                "_id": 1,
-                                "name": 1,
-                                "company_url": 1,
-                                "linkedin_url": 1,
-                                "logo_url": 1,
-                                "domain": 1,
-                                "industries": 1,
-                                "description": 1,
-                            }
-                        },
-                    ],
-                    "as": "company_info_array",
+                            },
+                        ],
+                    }
                 }
-            }
-        )
+            )
 
-        # Convert company_info_array to single object (or null if empty)
-        pipeline.append(
-            {
-                "$addFields": {
-                    "company_info": {
-                        "$cond": {
-                            "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
-                            "then": {"$arrayElemAt": ["$company_info_array", 0]},
-                            "else": None,
+            # Convert company_info_array to single object (or null if empty)
+            pipeline.append(
+                {
+                    "$addFields": {
+                        "company_info": {
+                            "$cond": {
+                                "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
+                                "then": {"$arrayElemAt": ["$company_info_array", 0]},
+                                "else": None,
+                            }
                         }
                     }
                 }
-            }
-        )
+            )
 
-        # Remove the temporary array field
-        pipeline.append({"$project": {"company_info_array": 0}})
+            # Remove the temporary array field
+            pipeline.append({"$project": {"company_info_array": 0}})
 
-        # Use $facet to get both data and count in one query
-        pipeline.append(
-            {
-                "$facet": {
-                    "metadata": [{"$count": "total"}],
-                    "data": [{"$skip": skip}, {"$limit": limit}],
+            # Use $facet to get both data and count in one query
+            pipeline.append(
+                {
+                    "$facet": {
+                        "metadata": [{"$count": "total"}],
+                        "data": [{"$skip": skip}, {"$limit": limit}],
+                    }
                 }
-            }
-        )
+            )
 
-        # Execute aggregation
-        result = list(self.collection.aggregate(pipeline))
+            start = time.perf_counter()
+            # Execute aggregation
+            result = list(self.collection.aggregate(pipeline))
 
-        if not result or len(result) == 0:
+            request_time = time.perf_counter() - start
+
+            logger.info(
+                f"Executing job listings search",
+                extra={
+                    "context": "JobListingRepository",
+                    "pipeline": pipeline,
+                    "request_time": f"{request_time * 1000:.0f} ms",
+                },
+            )
+
+            if not result or len(result) == 0:
+                return [], 0
+
+            facet_result = result[0]
+
+            # Extract total count
+            total = (
+                facet_result["metadata"][0]["total"] if facet_result["metadata"] else 0
+            )
+
+            # Extract and convert job listings
+            job_listings = []
+            for job in facet_result["data"]:
+                job["_id"] = str(job["_id"])
+
+                # Convert company_info._id to string if it exists
+                if job.get("company_info") and job["company_info"].get("_id"):
+                    job["company_info"]["_id"] = str(job["company_info"]["_id"])
+
+                job_listings.append(JobListingModel(**job))
+
+            return job_listings, total
+
+        except Exception as e:
+            logger.error(
+                "Error searching job listings",
+                extra={"context": "JobListingRepository", "error_msg": str(e)},
+            )
             return [], 0
-
-        facet_result = result[0]
-
-        # Extract total count
-        total = facet_result["metadata"][0]["total"] if facet_result["metadata"] else 0
-
-        # Extract and convert job listings
-        job_listings = []
-        for job in facet_result["data"]:
-            job["_id"] = str(job["_id"])
-
-            # Convert company_info._id to string if it exists
-            if job.get("company_info") and job["company_info"].get("_id"):
-                job["company_info"]["_id"] = str(job["company_info"]["_id"])
-
-            job_listings.append(JobListingModel(**job))
-
-        return job_listings, total
 
 
 # Singleton instance

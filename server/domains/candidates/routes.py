@@ -250,3 +250,85 @@ async def upload_and_parse_cv(
                 os.unlink(temp_file_path)
             except Exception as e:
                 print(f"Warning: Failed to delete temporary file {temp_file_path}: {e}")
+
+
+@router.post("/{candidate_id}/follow/{company_id}", response_model=CandidateResponse)
+async def follow_company(
+    candidate_id: str,
+    company_id: str,
+    current_user: UserInDB = Depends(get_current_active_user),
+):
+    """
+    Follow a company (add to candidate's followed companies list)
+
+    Requires authentication. Users can only follow companies for their own candidate profile.
+
+    - **candidate_id**: MongoDB ObjectId as string
+    - **company_id**: MongoDB ObjectId as string of the company to follow
+    """
+    # Validate that the user is following for their own candidate profile
+    if current_user.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only follow companies for your own profile",
+        )
+
+    # Validate candidate exists
+    candidate = candidate_repository.get_candidate_by_id(candidate_id)
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with id {candidate_id} not found",
+        )
+
+    # Follow the company
+    updated_candidate = candidate_repository.follow_company(candidate_id, company_id)
+
+    if not updated_candidate:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to follow company",
+        )
+
+    return updated_candidate
+
+
+@router.delete("/{candidate_id}/follow/{company_id}", response_model=CandidateResponse)
+async def unfollow_company(
+    candidate_id: str,
+    company_id: str,
+    current_user: UserInDB = Depends(get_current_active_user),
+):
+    """
+    Unfollow a company (remove from candidate's followed companies list)
+
+    Requires authentication. Users can only unfollow companies for their own candidate profile.
+
+    - **candidate_id**: MongoDB ObjectId as string
+    - **company_id**: MongoDB ObjectId as string of the company to unfollow
+    """
+    # Validate that the user is unfollowing for their own candidate profile
+    if current_user.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only unfollow companies for your own profile",
+        )
+
+    # Validate candidate exists
+    candidate = candidate_repository.get_candidate_by_id(candidate_id)
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with id {candidate_id} not found",
+        )
+
+    # Unfollow the company
+    updated_candidate = candidate_repository.unfollow_company(candidate_id, company_id)
+
+    if not updated_candidate:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to unfollow company",
+        )
+
+    return updated_candidate

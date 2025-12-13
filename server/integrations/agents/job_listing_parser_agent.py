@@ -411,14 +411,17 @@ async def run_agent_job_categorization(
     """
     try:
         # Step 1: Scrape the job description from the URL using Playwright
-        print(f"Scraping job description from: {categorization_input.job_url}")
         job_text = await scrape_job_description(categorization_input.job_url)
 
         if not job_text:
-            print(f"Failed to scrape content from {categorization_input.job_url}")
+            logger.error(
+                "Failed to scrape content",
+                extra={
+                    "context": "job_listing_parsing",
+                    "job_url": categorization_input.job_url,
+                },
+            )
             return None
-
-        print(f"Successfully scraped {len(job_text)} characters of text")
 
         # Step 2: Send the scraped text to the AI agent for parsing
         result = await Runner.run(
@@ -436,10 +439,17 @@ async def run_agent_job_categorization(
             ],
         )
 
-        logger.info(f"Job parser result: {result.final_output}")
         usage = result.context_wrapper.usage
+
         logger.info(
-            f"Job parser usage: {usage} Input tokens: {usage.input_tokens} Output tokens: {usage.output_tokens} Total tokens: {usage.total_tokens}"
+            "Successfully parsed job listing",
+            extra={
+                "context": "job_listing_parsing",
+                "job_url": categorization_input.job_url,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "total_tokens": usage.total_tokens,
+            },
         )
         return result.final_output
 
