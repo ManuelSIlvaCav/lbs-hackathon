@@ -11,16 +11,61 @@ services:
       - MONGODB_URL=mongodb://admin:admin123@mongo:27017
       - MONGODB_DATABASE=lbs_hackathon
       - ENVIRONMENT=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
     env_file:
       - .env
     volumes:
       - ./server:/app
     depends_on:
       - mongo
+      - redis
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - app-network
     restart: unless-stopped
+
+  # Celery Worker
+  worker:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: lbs-hackathon-worker
+    environment:
+      - MONGODB_URL=mongodb://admin:admin123@mongo:27017
+      - MONGODB_DATABASE=lbs_hackathon
+      - ENVIRONMENT=development
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - PYTHONPATH=/app
+    env_file:
+      - .env
+    volumes:
+      - ./server:/app
+    depends_on:
+      - mongo
+      - redis
+    command: celery -A celery_app worker --loglevel=info
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Redis (for Celery broker and result backend)
+  redis:
+    image: redis:7-alpine
+    container_name: lbs-hackathon-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
 
   # MongoDB Database
   mongo:
@@ -65,4 +110,6 @@ volumes:
   mongo-data:
     driver: local
   mongo-config:
+    driver: local
+  redis-data:
     driver: local

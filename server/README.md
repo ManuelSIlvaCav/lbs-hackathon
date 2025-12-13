@@ -2,6 +2,8 @@ Using FastAPI
 
 # Running the server
 
+## Local Development
+
 Recommended using UV for package manager - https://pypi.org/project/uv/
 
 Virtual env
@@ -9,6 +11,23 @@ Virtual env
 > uv venv
 
 > source .venv/bin/activate
+
+## Docker Compose (Recommended)
+
+Start all services (API, Celery Worker, Redis, MongoDB):
+
+```bash
+docker-compose up
+```
+
+This will start:
+
+- **API Server**: http://localhost:8000
+- **Celery Worker**: Background task processor
+- **Redis**: Message broker for Celery
+- **MongoDB**: Database
+
+For more details on background task processing, see [Celery Integration Guide](docs/CELERY_GUIDE.md)
 
 # Dependencies
 

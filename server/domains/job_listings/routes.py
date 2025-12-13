@@ -8,6 +8,7 @@ import asyncio
 
 from .models import JobListingCreate, JobListingUpdate, JobListingModel
 from .repository import job_listing_repository
+from .tasks import test_print_company_jobs
 
 
 router = APIRouter(prefix="/api/job-listings", tags=["job-listings"])
@@ -161,4 +162,77 @@ async def enrich_job_listing(job_listing_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to enrich job listing: {str(e)}",
+        )
+
+
+@router.post("/company/{company_id}/test-print-jobs")
+async def test_print_company_jobs_route(company_id: str):
+    """
+    Test endpoint that triggers a Celery task to retrieve and print all job listings for a company
+
+    This is a demonstration of Celery task integration. The task will:
+    - Retrieve all job listings for the specified company
+    - Print details of each job to the worker console logs
+    - Return task ID for status tracking
+
+    Check worker logs with: `docker-compose logs -f worker`
+
+    - **company_id**: MongoDB ObjectId as string for the company
+    """
+    try:
+        # Trigger the Celery task
+        task = test_print_company_jobs.delay(company_id)
+
+        return {
+            "status": "task_started",
+            "message": f"Task to print job listings for company {company_id} has been queued",
+            "task_id": task.id,
+            "company_id": company_id,
+            "instructions": "Check worker logs with: docker-compose logs -f worker",
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger task: {str(e)}",
+        )
+
+
+@router.get("/tasks/{task_id}/status")
+async def get_task_status(task_id: str):
+    """
+    Check the status of a Celery task
+
+    Possible states:
+    - PENDING: Task is waiting for execution
+    - STARTED: Task has been started
+    - SUCCESS: Task executed successfully
+    - FAILURE: Task execution failed
+    - RETRY: Task is waiting to be retried
+
+    - **task_id**: Celery task ID returned from task trigger endpoints
+    """
+    try:
+        from celery_app import celery_app
+
+        task_result = celery_app.AsyncResult(task_id)
+
+        response = {
+            "task_id": task_id,
+            "state": task_result.state,
+            "ready": task_result.ready(),
+        }
+
+        if task_result.ready():
+            if task_result.successful():
+                response["result"] = task_result.result
+            else:
+                response["error"] = str(task_result.result)
+
+        return response
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check task status: {str(e)}",
         )
