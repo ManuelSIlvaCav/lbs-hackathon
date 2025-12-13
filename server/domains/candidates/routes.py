@@ -7,7 +7,12 @@ from fastapi import APIRouter, HTTPException, status, UploadFile, File, Depends
 import os
 import tempfile
 
-from .models import CandidateCreate, CandidateUpdate, CandidateResponse
+from .models import (
+    CandidateCreate,
+    CandidateUpdate,
+    CandidateResponse,
+    SearchPreferences,
+)
 from .repository import candidate_repository
 from domains.auth.routes import get_current_active_user
 from domains.auth.models import UserInDB
@@ -118,6 +123,43 @@ async def delete_candidate(candidate_id: str):
             detail=f"Candidate with id {candidate_id} not found",
         )
     return None
+
+
+@router.patch("/{candidate_id}/search-preferences", response_model=CandidateResponse)
+async def update_search_preferences(
+    candidate_id: str,
+    search_preferences: SearchPreferences,
+    current_user: UserInDB = Depends(get_current_active_user),
+):
+    """
+    Update candidate search preferences
+
+    Requires authentication. Users can only update their own search preferences.
+    This endpoint allows partial updates - only provided fields will be updated.
+
+    - **candidate_id**: MongoDB ObjectId as string
+    - **search_preferences**: Search preferences object with any combination of fields
+    """
+    # Validate that the user is updating their own candidate profile
+    if current_user.candidate_id != candidate_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only update your own search preferences",
+        )
+
+    # Update only the search_preferences field
+    candidate_update = CandidateUpdate(search_preferences=search_preferences)
+    updated_candidate = candidate_repository.update_candidate(
+        candidate_id, candidate_update
+    )
+
+    if not updated_candidate:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Candidate with id {candidate_id} not found or update failed",
+        )
+
+    return updated_candidate
 
 
 @router.get("/stats/count")

@@ -1,6 +1,6 @@
 import {
-  authenticatedFetch,
-  createAuthHeaders
+    authenticatedFetch,
+    createAuthHeaders
 } from "@/lib/auth";
 import { Candidate } from "@/lib/types/candidate";
 
@@ -137,6 +137,40 @@ export const candidateApi = {
           .json()
           .catch(() => ({ detail: response.statusText }));
         throw new Error(error.detail || "Failed to update candidate metadata");
+      }
+
+      return response.json();
+    } catch (error: any) {
+      throw error;
+    }
+  },
+
+  updateSearchPreferences: async (
+    candidateId: string,
+    searchPreferences: any,
+    params: CandidateApiParams = {}
+  ): Promise<Candidate> => {
+    const { jwt, authStrategy = "refresh" } = params;
+
+    try {
+      const response = await authenticatedFetch(
+        `${API_BASE_URL}/api/candidates/${candidateId}/search-preferences`,
+        {
+          method: "PATCH",
+          headers: {
+            ...createAuthHeaders(jwt),
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(searchPreferences),
+        },
+        { strategy: authStrategy }
+      );
+
+      if (!response.ok) {
+        const error = await response
+          .json()
+          .catch(() => ({ detail: response.statusText }));
+        throw new Error(error.detail || "Failed to update search preferences");
       }
 
       return response.json();

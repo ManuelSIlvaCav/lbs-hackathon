@@ -173,7 +173,7 @@ class JobListingRepository:
 
     def get_job_listing_by_id(self, job_id: str) -> Optional[JobListingModel]:
         """
-        Get a job listing by ID
+        Get a job listing by ID with company information
 
         Args:
             job_id: String representation of MongoDB ObjectId
@@ -182,10 +182,66 @@ class JobListingRepository:
             JobListingModel if found, None otherwise
         """
         try:
-            job = self.collection.find_one({"_id": ObjectId(job_id)})
-            if job:
+            # Use aggregation to include company lookup
+            pipeline = [
+                {"$match": {"_id": ObjectId(job_id)}},
+                {
+                    "$lookup": {
+                        "from": "companies",
+                        "let": {"company_id_str": {"$toString": "$company_id"}},
+                        "pipeline": [
+                            {
+                                "$match": {
+                                    "$expr": {
+                                        "$eq": [
+                                            {"$toString": "$_id"},
+                                            "$$company_id_str",
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                "$project": {
+                                    "_id": 1,
+                                    "name": 1,
+                                    "company_url": 1,
+                                    "linkedin_url": 1,
+                                    "logo_url": 1,
+                                    "domain": 1,
+                                    "industries": 1,
+                                    "description": 1,
+                                }
+                            },
+                        ],
+                        "as": "company_info_array",
+                    }
+                },
+                {
+                    "$addFields": {
+                        "company_info": {
+                            "$cond": {
+                                "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
+                                "then": {"$arrayElemAt": ["$company_info_array", 0]},
+                                "else": None,
+                            }
+                        }
+                    }
+                },
+                {"$project": {"company_info_array": 0}},
+            ]
+
+            result = list(self.collection.aggregate(pipeline))
+
+            if result:
+                job = result[0]
                 job["_id"] = str(job["_id"])
+
+                # Convert company_info._id to string if it exists
+                if job.get("company_info") and job["company_info"].get("_id"):
+                    job["company_info"]["_id"] = str(job["company_info"]["_id"])
+
                 return JobListingModel(**job)
+
             return None
         except Exception as e:
             print(f"Error getting job listing: {e}")
@@ -195,7 +251,7 @@ class JobListingRepository:
         self, skip: int = 0, limit: int = 100, status: Optional[str] = None
     ) -> List[JobListingModel]:
         """
-        Get all job listings with pagination and optional status filter
+        Get all job listings with pagination and optional status filter, including company info
 
         Args:
             skip: Number of documents to skip
@@ -205,19 +261,79 @@ class JobListingRepository:
         Returns:
             List of JobListingModel objects
         """
-        job_listings = []
+        # Build aggregation pipeline
+        pipeline = []
 
-        # Build query filter
-        query = {}
+        # Add match stage if status filter exists
         if status:
-            query["status"] = status
+            pipeline.append({"$match": {"status": status}})
 
-        cursor = (
-            self.collection.find(query).skip(skip).limit(limit).sort("created_at", -1)
+        # Sort by most recent first
+        pipeline.append({"$sort": {"created_at": -1}})
+
+        # Skip and limit
+        pipeline.append({"$skip": skip})
+        pipeline.append({"$limit": limit})
+
+        # Add $lookup stage to join company information
+        pipeline.append(
+            {
+                "$lookup": {
+                    "from": "companies",
+                    "let": {"company_id_str": {"$toString": "$company_id"}},
+                    "pipeline": [
+                        {
+                            "$match": {
+                                "$expr": {
+                                    "$eq": [{"$toString": "$_id"}, "$$company_id_str"]
+                                }
+                            }
+                        },
+                        {
+                            "$project": {
+                                "_id": 1,
+                                "name": 1,
+                                "company_url": 1,
+                                "linkedin_url": 1,
+                                "logo_url": 1,
+                                "domain": 1,
+                                "industries": 1,
+                                "description": 1,
+                            }
+                        },
+                    ],
+                    "as": "company_info_array",
+                }
+            }
         )
 
-        for job in cursor:
+        # Convert company_info_array to single object
+        pipeline.append(
+            {
+                "$addFields": {
+                    "company_info": {
+                        "$cond": {
+                            "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
+                            "then": {"$arrayElemAt": ["$company_info_array", 0]},
+                            "else": None,
+                        }
+                    }
+                }
+            }
+        )
+
+        # Remove the temporary array field
+        pipeline.append({"$project": {"company_info_array": 0}})
+
+        # Execute aggregation
+        job_listings = []
+        for job in self.collection.aggregate(pipeline):
             job["_id"] = str(job["_id"])
+
+            # Convert company_info._id to string if it exists
+            if job.get("company_info") and job["company_info"].get("_id"):
+                job["company_info"]["_id"] = str(job["company_info"]["_id"])
+
             job_listings.append(JobListingModel(**job))
 
         return job_listings
@@ -609,6 +725,139 @@ class JobListingRepository:
         except Exception as e:
             print(f"Error getting job listing by URL: {e}")
             return None
+
+    def search_job_listings(
+        self,
+        company_id: Optional[str] = None,
+        country: Optional[str] = None,
+        city: Optional[str] = None,
+        origin: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> tuple[List[JobListingModel], int]:
+        """
+        Search job listings with filters using MongoDB aggregation pipeline with $facet
+        for efficient pagination following best practices. Includes company information via $lookup.
+
+        Args:
+            company_id: Optional company ID to filter by
+            country: Optional country to filter by
+            city: Optional city to filter by
+            origin: Optional origin to filter by (linkedin, greenhouse, workday, careers)
+            skip: Number of documents to skip
+            limit: Maximum number of documents to return
+
+        Returns:
+            Tuple of (list of JobListingModel objects, total count)
+        """
+        # Build match stage based on filters
+        match_stage = {}
+
+        if company_id:
+            match_stage["company_id"] = company_id
+
+        if country:
+            match_stage["country"] = country
+
+        if city:
+            match_stage["city"] = city
+
+        if origin:
+            match_stage["origin"] = origin
+
+        # Build aggregation pipeline with $facet for efficient pagination
+        pipeline = []
+
+        # Add match stage if we have filters
+        if match_stage:
+            pipeline.append({"$match": match_stage})
+
+        # Add sort stage (most recent first)
+        pipeline.append({"$sort": {"created_at": -1}})
+
+        # Add $lookup stage to join company information
+        pipeline.append(
+            {
+                "$lookup": {
+                    "from": "companies",
+                    "let": {"company_id_str": {"$toString": "$company_id"}},
+                    "pipeline": [
+                        {
+                            "$match": {
+                                "$expr": {
+                                    "$eq": [{"$toString": "$_id"}, "$$company_id_str"]
+                                }
+                            }
+                        },
+                        {
+                            "$project": {
+                                "_id": 1,
+                                "name": 1,
+                                "company_url": 1,
+                                "linkedin_url": 1,
+                                "logo_url": 1,
+                                "domain": 1,
+                                "industries": 1,
+                                "description": 1,
+                            }
+                        },
+                    ],
+                    "as": "company_info_array",
+                }
+            }
+        )
+
+        # Convert company_info_array to single object (or null if empty)
+        pipeline.append(
+            {
+                "$addFields": {
+                    "company_info": {
+                        "$cond": {
+                            "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
+                            "then": {"$arrayElemAt": ["$company_info_array", 0]},
+                            "else": None,
+                        }
+                    }
+                }
+            }
+        )
+
+        # Remove the temporary array field
+        pipeline.append({"$project": {"company_info_array": 0}})
+
+        # Use $facet to get both data and count in one query
+        pipeline.append(
+            {
+                "$facet": {
+                    "metadata": [{"$count": "total"}],
+                    "data": [{"$skip": skip}, {"$limit": limit}],
+                }
+            }
+        )
+
+        # Execute aggregation
+        result = list(self.collection.aggregate(pipeline))
+
+        if not result or len(result) == 0:
+            return [], 0
+
+        facet_result = result[0]
+
+        # Extract total count
+        total = facet_result["metadata"][0]["total"] if facet_result["metadata"] else 0
+
+        # Extract and convert job listings
+        job_listings = []
+        for job in facet_result["data"]:
+            job["_id"] = str(job["_id"])
+
+            # Convert company_info._id to string if it exists
+            if job.get("company_info") and job["company_info"].get("_id"):
+                job["company_info"]["_id"] = str(job["company_info"]["_id"])
+
+            job_listings.append(JobListingModel(**job))
+
+        return job_listings, total
 
 
 # Singleton instance

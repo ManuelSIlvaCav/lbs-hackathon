@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { Briefcase, FileText, LogOut, Search, User, Zap } from "lucide-react";
+import { Briefcase, LogOut, Search, Settings, User, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -17,13 +17,28 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "./ui/badge";
 
 // Menu items for different sections
 const prepareItems = [
   {
-    title: "Resumes",
-    icon: FileText,
-    url: "/dashboard/resumes",
+    title: "Candidate Profile",
+    icon: User,
+    url: "/dashboard/candidate",
+  },
+  {
+    title: "Search Preferences",
+    icon: Settings,
+    url: "/dashboard/candidate/search-preferences",
+    component: (
+      <a href={"/dashboard/candidate/search-preferences"}>
+        <Settings />
+        <span>{"Search Preferences"}</span>
+        <Badge variant={"default"} className="ml-auto">
+          Beta
+        </Badge>
+      </a>
+    ),
   },
 ];
 
@@ -40,7 +55,15 @@ const applyItems = [
     title: "Auto Apply",
     icon: Zap,
     url: "/dashboard/auto-apply",
-    badge: "Auto Apply",
+    component: (
+      <a href={"/dashboard/auto-apply"}>
+        <Zap />
+        <span>{"Auto Apply"}</span>
+        <Badge variant={"default"} className="ml-auto">
+          Beta
+        </Badge>
+      </a>
+    ),
   },
 ];
 
@@ -90,10 +113,14 @@ export function AppSidebar() {
               {prepareItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </a>
+                    {item.component ? (
+                      item.component
+                    ) : (
+                      <a href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </a>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -129,10 +156,14 @@ export function AppSidebar() {
                     asChild
                     isActive={item.url === "/auto-apply"}
                   >
-                    <a href={item.url}>
-                      <item.icon />
-                      <span>{item.title}</span>
-                    </a>
+                    {item.component ? (
+                      item.component
+                    ) : (
+                      <a href={item.url}>
+                        <item.icon />
+                        <span>{item.title}</span>
+                      </a>
+                    )}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}

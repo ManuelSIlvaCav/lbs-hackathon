@@ -1,4 +1,4 @@
-import { CompanyJobListing } from "../types/company-job-listing";
+import { JobListing } from "../types/job-listing";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -8,7 +8,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export async function getCompanyJobListings(
   companyId: string,
   token?: string
-): Promise<CompanyJobListing[]> {
+): Promise<JobListing[]> {
   const headers: HeadersInit = {
     "Content-Type": "application/json",
   };

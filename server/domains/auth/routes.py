@@ -2,7 +2,7 @@
 Authentication routes
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from typing import Optional
 
@@ -190,7 +190,7 @@ async def signup(user_create: UserCreate):
 
 
 @router.post("/login", response_model=Token)
-async def login(user_login: UserLogin):
+async def login(response: Response, user_login: UserLogin):
     """
     Login for regular users
 
@@ -257,6 +257,14 @@ async def login(user_login: UserLogin):
             "role": user.role.value,
             "candidate_id": candidate.id,
         }
+    )
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        max_age=7 * 24 * 60 * 60,  # 7 days
     )
 
     # Return token and user

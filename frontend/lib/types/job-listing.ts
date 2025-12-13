@@ -49,25 +49,49 @@ export interface JobListingMetadata {
   categorization_schema: JobCategorizationSchema | null;
 }
 
+// Company info embedded in job listing
+export interface CompanyInfo {
+  _id: string;
+  name?: string;
+  company_url?: string;
+  linkedin_url?: string;
+  logo_url?: string;
+  domain?: string;
+  industries?: string[];
+  description?: string;
+}
+
 // Main job listing interface (aligned with JobListingModel from backend)
 // Note: Provider tracking moved to JobListingSourceModel
 export interface JobListing {
   _id: string;
   url: string;
-  title: string | null;
-  company: string | null;
-  company_id: string | null;
-  location: string | null;
-  city: string | null;
-  state: string | null;
-  country: string | null;
-  description: string | null;
-  posted_at: string | null;
-  last_seen_at: string | null;
-  metadata: JobListingMetadata | null;
-  status: string;
-  created_at: string;
-  updated_at: string | null;
+  title?: string | null;
+  company?: string | null;
+  company_id?: string | null;
+  location?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  description?: string | null;
+  posted_at?: string | null;
+  last_seen_at?: string | null;
+  metadata?: JobListingMetadata | null;
+  status?: string;
+  created_at?: string;
+  updated_at?: string | null;
+  origin?: "linkedin" | "greenhouse" | "workday" | "careers" | "other";
+  origin_domain?: string;
+  profile_categories?: string[];
+  role_titles?: string[];
+  employement_type?: string;
+  work_arrangement?: string;
+  listing_status?: "active" | "expired";
+  source_status?: "enriched" | "scrapped" | "active";
+  salary_range_min?: number;
+  salary_range_max?: number;
+  salary_currency?: string;
+  company_info?: CompanyInfo | null;
 }
 
 export interface JobListingCreate {
@@ -92,4 +116,12 @@ export interface JobListingUpdate {
   description?: string;
   metadata?: JobListingMetadata;
   status?: string;
+}
+
+export interface PaginatedJobListingResponse {
+  items: JobListing[];
+  total: number;
+  skip: number;
+  limit: number;
+  has_more: boolean;
 }

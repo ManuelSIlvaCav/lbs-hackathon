@@ -28,6 +28,9 @@ from integrations.agents.cv_parser_agent import (
     run_agent_cv_categorization,
 )
 
+import logging
+
+logger = logging.getLogger("app")
 
 # ============================================================================
 # Candidate Repository
@@ -123,13 +126,13 @@ class CandidateRepository:
         """
         try:
             candidate = self.collection.find_one({"_id": ObjectId(candidate_id)})
-            print(f"Retrieved candidate: {candidate}")
             if candidate:
                 candidate["_id"] = str(candidate["_id"])
                 return CandidateResponse(**candidate)
             return None
         except Exception as e:
             print(f"Error getting candidate: {e}")
+            logger.error(f"Error getting candidate", extra={"error_msg": e})
             return None
 
     def get_all_candidates(

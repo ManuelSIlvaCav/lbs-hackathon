@@ -13,7 +13,7 @@ import {
 import { Company } from "@/contexts/admin-company-context";
 import { useAuth } from "@/contexts/auth-context";
 import { getCompanyJobListings } from "@/lib/api/company-jobs";
-import { CompanyJobListing } from "@/lib/types/company-job-listing";
+import { JobListing } from "@/lib/types/job-listing";
 import { Briefcase, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -21,7 +21,7 @@ import { CreateCompanyDialog } from "./create-company-dialog";
 
 export default function AdminCompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [jobListings, setJobListings] = useState<CompanyJobListing[]>([]);
+  const [jobListings, setJobListings] = useState<JobListing[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
   const [showJobs, setShowJobs] = useState(false);
   const [enriching, setEnriching] = useState(false);

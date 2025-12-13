@@ -9,19 +9,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CompanyJobListing } from "@/lib/types/company-job-listing";
+import { JobListing } from "@/lib/types/job-listing";
 import {
+  Building2,
   Calendar,
   ExternalLink,
   Loader2,
   MapPin,
   Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 
 interface JobListingsProps {
-  jobs: CompanyJobListing[];
+  jobs: JobListing[];
   isLoading?: boolean;
   onJobEnriched?: () => void;
 }
@@ -87,14 +89,14 @@ export function JobListings({
 }
 
 interface JobListingCardProps {
-  job: CompanyJobListing;
+  job: JobListing;
   onEnrich?: (jobId: string) => void;
 }
 
-function JobListingCard({ job, onEnrich }: JobListingCardProps) {
+export function JobListingCard({ job, onEnrich }: JobListingCardProps) {
   const [enriching, setEnriching] = useState(false);
 
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | null) => {
     if (!dateString) return null;
     try {
       const date = new Date(dateString);
@@ -211,6 +213,35 @@ function JobListingCard({ job, onEnrich }: JobListingCardProps) {
       <CardContent className="pt-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 space-y-3">
+            {/* Company Info */}
+            {job.company_info && (
+              <div className="flex items-center gap-3">
+                {job.company_info.logo_url ? (
+                  <img
+                    src={job.company_info.logo_url}
+                    alt={job.company_info.name || "Company logo"}
+                    className="h-10 w-10 rounded object-contain border"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded bg-muted flex items-center justify-center border">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                )}
+                {job.company_info._id ? (
+                  <Link
+                    href={`/dashboard/company/${job.company_info._id}`}
+                    className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors hover:underline"
+                  >
+                    {job.company_info.name || job.company || "Unknown Company"}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {job.company_info.name || job.company || "Unknown Company"}
+                  </span>
+                )}
+              </div>
+            )}
+
             {/* Job Title */}
             <div>
               <h3 className="text-lg font-semibold leading-tight">
@@ -315,7 +346,7 @@ function JobListingCard({ job, onEnrich }: JobListingCardProps) {
 
           {/* Action Buttons */}
           <div className="shrink-0 flex flex-col gap-2">
-            {!isEnriched && (
+            {!isEnriched && onEnrich && (
               <Button
                 onClick={handleEnrich}
                 disabled={enriching}

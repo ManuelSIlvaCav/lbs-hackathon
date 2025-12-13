@@ -29,7 +29,10 @@ export const getAccessToken = (): string | null => {
  * Get stored refresh token
  */
 export const getRefreshToken = (): string | null => {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined"){
+    console.log("Window is undefined");
+    return null;
+  }
   return localStorage.getItem("refresh_token");
 };
 

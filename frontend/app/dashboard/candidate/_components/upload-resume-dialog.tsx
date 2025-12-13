@@ -12,45 +12,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { candidateApi } from "@/lib/api/candidate";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCandidateContext } from "@/contexts/candidate-context";
 import { Loader2, Plus } from "lucide-react";
 import * as React from "react";
-import { toast } from "sonner";
 
-interface UploadResumeDialogProps {
-  candidateId: string;
-}
-
-export function UploadResumeDialog({ candidateId }: UploadResumeDialogProps) {
+export function UploadResumeDialog() {
   const [open, setOpen] = React.useState(false);
   const [resumeName, setResumeName] = React.useState("");
   const [selectedFile, setSelectedFile] = React.useState<File | null>(null);
-  const queryClient = useQueryClient();
-
-  // Upload and parse CV mutation
-  const uploadMutation = useMutation({
-    mutationFn: (file: File) =>
-      candidateApi.uploadAndParseCV(candidateId, file, {
-        authStrategy: "refresh", // Auto-refresh token on 401 error
-      }),
-    onSuccess: async (updatedCandidate) => {
-      // Update the query cache with the new candidate data
-      queryClient.setQueryData(["candidate", candidateId], updatedCandidate);
-
-      // Also invalidate to ensure a fresh fetch
-      await queryClient.invalidateQueries({
-        queryKey: ["candidate", candidateId],
-      });
-
-      toast.success("CV uploaded and parsed successfully!");
-      // Close dialog and reset form
-      handleClose();
-    },
-    onError: (error: Error) => {
-      toast.error(`Failed to upload CV: ${error.message}`);
-    },
-  });
+  const { uploadAndParseCV, isUploading } = useCandidateContext();
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file);
@@ -61,13 +31,14 @@ export function UploadResumeDialog({ candidateId }: UploadResumeDialogProps) {
     }
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!selectedFile || !resumeName) {
       return;
     }
 
     // Upload and parse the CV
-    uploadMutation.mutate(selectedFile);
+    await uploadAndParseCV(selectedFile);
+    handleClose();
   };
 
   const handleClose = () => {
@@ -104,7 +75,7 @@ export function UploadResumeDialog({ candidateId }: UploadResumeDialogProps) {
               placeholder="e.g., Senior Product Manager Resume"
               value={resumeName}
               onChange={(e) => setResumeName(e.target.value)}
-              disabled={uploadMutation.isPending}
+              disabled={isUploading}
             />
           </div>
 
@@ -128,17 +99,15 @@ export function UploadResumeDialog({ candidateId }: UploadResumeDialogProps) {
           <Button
             variant="outline"
             onClick={handleClose}
-            disabled={uploadMutation.isPending}
+            disabled={isUploading}
           >
             Cancel
           </Button>
           <Button
             onClick={handleUpload}
-            disabled={
-              !selectedFile || !resumeName.trim() || uploadMutation.isPending
-            }
+            disabled={!selectedFile || !resumeName.trim() || isUploading}
           >
-            {uploadMutation.isPending ? (
+            {isUploading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Uploading & Parsing...

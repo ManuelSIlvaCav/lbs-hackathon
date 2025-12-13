@@ -1,103 +1,102 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { JobListingCard } from "@/components/job-listings";
+import { JobSearchFilters } from "@/components/job-search-filters";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Company } from "@/contexts/admin-company-context";
 import { jobListingApi } from "@/lib/api/job-listing";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Loader2, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 export default function JobListingsPage() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [jobUrl, setJobUrl] = useState("");
   const queryClient = useQueryClient();
 
-  // Fetch job listings
+  // Search filters
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [selectedCountry, setSelectedCountry] = useState("");
+  const [selectedCity, setSelectedCity] = useState("");
+  const [selectedOrigin, setSelectedOrigin] = useState("");
+
+  // Ref for infinite scroll observer
+  const observerTarget = useRef<HTMLDivElement>(null);
+
+  // Infinite query for job listings
   const {
-    data: jobListings,
+    data,
     isLoading,
+    isError,
     error,
-  } = useQuery({
-    queryKey: ["jobListings"],
-    queryFn: () => jobListingApi.getJobListings(),
-  });
-
-  // Create job listing mutation
-  const createMutation = useMutation({
-    mutationFn: (url: string) =>
-      jobListingApi.createJobListing({
-        url,
-        title: "",
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: [
+      "jobListings",
+      selectedCompany?._id,
+      selectedCountry,
+      selectedCity,
+      selectedOrigin,
+    ],
+    queryFn: ({ pageParam = 0 }) =>
+      jobListingApi.searchJobListings({
+        company_id: selectedCompany?._id,
+        country: selectedCountry || undefined,
+        city: selectedCity || undefined,
+        origin: selectedOrigin || undefined,
+        skip: pageParam,
+        limit: 20,
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["jobListings"] });
-      toast.success("Job listing added successfully!");
-      setIsDialogOpen(false);
-      setJobUrl("");
+    getNextPageParam: (lastPage) => {
+      return lastPage.has_more ? lastPage.skip + lastPage.limit : undefined;
     },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to add job listing"
-      );
-    },
+    initialPageParam: 0,
   });
 
-  // Delete job listing mutation
-  const deleteMutation = useMutation({
-    mutationFn: (jobId: string) => jobListingApi.deleteJobListing(jobId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["jobListings"] });
-      toast.success("Job listing deleted successfully!");
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete job listing"
-      );
-    },
-  });
+  // Setup intersection observer for infinite scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { threshold: 0.1 }
+    );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!jobUrl.trim()) {
-      toast.error("Please enter a job URL");
-      return;
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
     }
-    createMutation.mutate(jobUrl);
-  };
 
-  const handleDelete = (jobId: string) => {
-    if (confirm("Are you sure you want to delete this job listing?")) {
-      deleteMutation.mutate(jobId);
-    }
-  };
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
+  const handleSearch = () => {
+    // Search is automatically triggered by query key changes
+    console.log("Searching with filters:", {
+      company: selectedCompany?.name,
+      country: selectedCountry,
+      city: selectedCity,
+      origin: selectedOrigin,
     });
   };
+
+  const handleClearFilters = () => {
+    setSelectedCompany(null);
+    setSelectedCountry("");
+    setSelectedCity("");
+    setSelectedOrigin("");
+  };
+
+  // Flatten all pages into single array
+  const allJobs = data?.pages.flatMap((page) => page.items) ?? [];
+  const totalCount = data?.pages[0]?.total ?? 0;
 
   return (
     <div className="flex h-full w-full flex-col">
@@ -106,61 +105,28 @@ export default function JobListingsPage() {
         <div className="flex items-center gap-4">
           <SidebarTrigger />
           <div>
-            <h1 className="text-3xl font-semibold">Job Listings</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Manage and track job opportunities you're interested in
+            <h1 className="text-3xl font-semibold font-sora">Job Listings</h1>
+            <p className="mt-1 text-sm text-muted-foreground font-inter">
+              {totalCount > 0 &&
+                `${totalCount} job${totalCount !== 1 ? "s" : ""} found`}
             </p>
           </div>
         </div>
-
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Job
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle>Add New Job Listing</DialogTitle>
-                <DialogDescription>
-                  Enter the URL of the job listing you want to track.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="job-url">Job URL</Label>
-                  <Input
-                    id="job-url"
-                    type="url"
-                    placeholder="https://example.com/jobs/123"
-                    value={jobUrl}
-                    onChange={(e) => setJobUrl(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  disabled={createMutation.isPending}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Add Job
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </header>
+
+      {/* Search Filters */}
+      <JobSearchFilters
+        selectedCompany={selectedCompany}
+        selectedCountry={selectedCountry}
+        selectedCity={selectedCity}
+        selectedOrigin={selectedOrigin}
+        onCompanyChange={setSelectedCompany}
+        onCountryChange={setSelectedCountry}
+        onCityChange={setSelectedCity}
+        onOriginChange={setSelectedOrigin}
+        onSearch={handleSearch}
+        onClear={handleClearFilters}
+      />
 
       {/* Content Area */}
       <div className="flex-1 overflow-auto px-6 py-6">
@@ -168,123 +134,65 @@ export default function JobListingsPage() {
           <div className="flex h-full items-center justify-center">
             <div className="text-center space-y-2">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
-              <p className="text-muted-foreground">Loading job listings...</p>
+              <p className="text-muted-foreground font-inter">
+                Loading job listings...
+              </p>
             </div>
           </div>
-        ) : error ? (
+        ) : isError ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center space-y-2">
               <p className="text-destructive">Error loading job listings</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-muted-foreground font-inter">
                 {error instanceof Error ? error.message : "Unknown error"}
               </p>
             </div>
           </div>
-        ) : !jobListings || jobListings.length === 0 ? (
+        ) : allJobs.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <div className="text-center space-y-2">
-              <p className="text-muted-foreground">No job listings yet</p>
-              <p className="text-sm text-muted-foreground">
-                Click "Add Job" to start tracking job opportunities
+              <p className="text-muted-foreground font-inter">
+                No job listings found
+              </p>
+              <p className="text-sm text-muted-foreground font-inter">
+                Try adjusting your filters or add a new job listing
               </p>
             </div>
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Company Name</TableHead>
-                  <TableHead>Role Title</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {jobListings.map((job) => {
-                  // Extract data from metadata if available, fallback to top-level fields
-                  const companyName =
-                    job.metadata?.categorization_schema?.job_info
-                      ?.company_name || job.company;
-                  const roleTitle =
-                    job.metadata?.categorization_schema?.job_info?.job_title ||
-                    job.title;
-                  const location =
-                    job.metadata?.categorization_schema?.job_info?.location ||
-                    job.location;
+          <div className="space-y-4">
+            {/* Job Listings Grid */}
+            <div className="grid gap-4">
+              {allJobs.map((job) => (
+                <JobListingCard
+                  key={job._id}
+                  job={job as any}
+                  onEnrich={undefined}
+                />
+              ))}
+            </div>
 
-                  return (
-                    <TableRow key={job._id}>
-                      <TableCell className="font-medium">
-                        {companyName || (
-                          <span className="text-muted-foreground italic">
-                            Not available
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {roleTitle ? (
-                          <a
-                            href={job.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline"
-                          >
-                            <ExternalLink className="h-4 w-4 shrink-0" />
-                            <span>{roleTitle}</span>
-                          </a>
-                        ) : (
-                          <a
-                            href={job.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-blue-600 hover:underline"
-                          >
-                            <ExternalLink className="h-4 w-4 shrink-0" />
-                            <span className="text-muted-foreground italic">
-                              View Job
-                            </span>
-                          </a>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {location || (
-                          <span className="text-muted-foreground italic">
-                            Not available
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                            job.status === "active"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {job.status}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatDate(job.created_at)}
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(job._id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            {/* Loading More Indicator */}
+            {isFetchingNextPage && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground font-inter">
+                  Loading more...
+                </span>
+              </div>
+            )}
+
+            {/* Intersection Observer Target */}
+            <div ref={observerTarget} className="h-4" />
+
+            {/* End of Results */}
+            {!hasNextPage && allJobs.length > 0 && (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground font-inter">
+                  No more results
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

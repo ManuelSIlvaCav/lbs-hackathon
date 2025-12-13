@@ -13,7 +13,7 @@ from .models import TokenData
 # JWT settings
 SECRET_KEY = "secret-key-apply-ai"  # TODO: Move to environment variables
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # Access tokens last 24 hours
 REFRESH_TOKEN_EXPIRE_DAYS = 7  # Refresh tokens last 7 days
 
 # Password hashing

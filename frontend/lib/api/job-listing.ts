@@ -1,8 +1,34 @@
-import { JobListing, JobListingCreate, JobListingUpdate } from "@/lib/types/job-listing";
+import { JobListing, JobListingCreate, JobListingUpdate, PaginatedJobListingResponse } from "@/lib/types/job-listing";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export const jobListingApi = {
+  searchJobListings: async (params?: {
+    company_id?: string;
+    country?: string;
+    city?: string;
+    origin?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<PaginatedJobListingResponse> => {
+    const searchParams = new URLSearchParams();
+    if (params?.company_id) searchParams.append("company_id", params.company_id);
+    if (params?.country) searchParams.append("country", params.country);
+    if (params?.city) searchParams.append("city", params.city);
+    if (params?.origin) searchParams.append("origin", params.origin);
+    if (params?.skip !== undefined) searchParams.append("skip", params.skip.toString());
+    if (params?.limit !== undefined) searchParams.append("limit", params.limit.toString());
+
+    const url = `${API_BASE_URL}/api/job-listings/search${searchParams.toString() ? `?${searchParams.toString()}` : ""}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to search job listings: ${response.statusText}`);
+    }
+    
+    return response.json();
+  },
+
   getJobListings: async (params?: { skip?: number; limit?: number; status?: string }): Promise<JobListing[]> => {
     const searchParams = new URLSearchParams();
     if (params?.skip !== undefined) searchParams.append("skip", params.skip.toString());

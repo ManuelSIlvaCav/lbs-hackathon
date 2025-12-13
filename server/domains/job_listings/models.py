@@ -15,6 +15,27 @@ from integrations.agents.job_listing_parser_agent import AgentJobCategorizationS
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
 
+class CompanyInfo(BaseModel):
+    """Embedded company information in job listing"""
+
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    name: Optional[str] = Field(default=None, description="Company name")
+    company_url: Optional[str] = Field(default=None, description="Company website URL")
+    linkedin_url: Optional[str] = Field(default=None, description="LinkedIn URL")
+    logo_url: Optional[str] = Field(default=None, description="Company logo URL")
+    domain: Optional[str] = Field(default=None, description="Company domain")
+    industries: Optional[list[str]] = Field(
+        default=None, description="Company industries"
+    )
+    description: Optional[str] = Field(default=None, description="Company description")
+
+    model_config = ConfigDict(
+        populate_by_name=True,
+        arbitrary_types_allowed=True,
+        json_encoders={ObjectId: str, datetime: lambda v: v.isoformat() if v else None},
+    )
+
+
 class JobListingMetadata(BaseModel):
     """Metadata for job listing including parsed job description"""
 
@@ -112,6 +133,10 @@ class JobListingModel(BaseModel):
     salary_currency: Optional[str] = Field(
         default=None, description="Currency of the salary range (e.g., USD, EUR)"
     )
+    company_info: Optional[CompanyInfo] = Field(
+        default=None,
+        description="Embedded company information from lookup (not stored in DB)",
+    )
 
 
 class JobListingCreate(BaseModel):
@@ -147,3 +172,15 @@ class JobListingUpdate(BaseModel):
     location: Optional[str] = Field(default=None, description="Job location")
     description: Optional[str] = Field(default=None, description="Job description")
     status: Optional[str] = Field(default=None, description="Status of the job listing")
+
+
+class PaginatedJobListingResponse(BaseModel):
+    """Paginated response for job listings"""
+
+    items: list[JobListingModel] = Field(
+        default_factory=list, description="List of job listings"
+    )
+    total: int = Field(..., description="Total number of job listings matching filters")
+    skip: int = Field(..., description="Number of items skipped")
+    limit: int = Field(..., description="Number of items per page")
+    has_more: bool = Field(..., description="Whether there are more items to fetch")

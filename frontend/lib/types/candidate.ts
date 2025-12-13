@@ -91,11 +91,29 @@ export interface CandidateMetadata {
   categorization_schema: CategorizationSchema | null;
 }
 
+export interface SearchPreferences {
+  locations?: string[];
+  visa_sponsorship?: boolean;
+  languages?: string[];
+  role_type?: string[];
+  role_level?: string[];
+  minimum_salary?: number;
+  role_priorities?: string[];
+  favourite_industries?: string[];
+  hidden_industries?: string[];
+  favourite_technologies?: string[];
+  hidden_technologies?: string[];
+  company_size?: string[];
+  followed_companies?: string[];
+  hidden_companies?: string[];
+}
+
 export interface Candidate {
   _id: string;
   name: string;
   email: string | null;
   metadata: CandidateMetadata | null;
+  search_preferences?: SearchPreferences | null;
   created_at: string;
   updated_at: string;
 }

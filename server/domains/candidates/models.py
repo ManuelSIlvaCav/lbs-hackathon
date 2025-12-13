@@ -2,9 +2,9 @@
 Models for candidates and candidate files
 """
 
-from typing import Annotated, List, Optional, Dict, Any
+from typing import Annotated, List, Optional, Dict, Any, Union
 from datetime import datetime
-from pydantic import BaseModel, BeforeValidator, Field, ConfigDict
+from pydantic import BaseModel, BeforeValidator, Field, ConfigDict, field_validator
 from bson import ObjectId
 
 from integrations.agents.cv_parser_agent import AgentCvCategorizationSchema
@@ -12,6 +12,85 @@ from integrations.agents.cv_parser_agent import AgentCvCategorizationSchema
 
 # Custom type for MongoDB ObjectId
 PyObjectId = Annotated[str, BeforeValidator(str)]
+
+
+# ============================================================================
+# Search Preferences Models
+# ============================================================================
+
+
+class SearchPreferences(BaseModel):
+    """Search preferences for job matching"""
+
+    # Location preferences
+    locations: Optional[List[str]] = Field(
+        default=None,
+        description="Preferred work locations (e.g., 'Remote', 'London', 'New York')",
+    )
+    visa_sponsorship: Optional[Dict[str, bool]] = Field(
+        default=None, description="Visa sponsorship requirements by region (uk, eu, us)"
+    )
+    languages: Optional[List[str]] = Field(default=None, description="Languages spoken")
+
+    @field_validator("visa_sponsorship", mode="before")
+    @classmethod
+    def convert_visa_sponsorship(cls, v):
+        """Convert legacy boolean visa_sponsorship to dict format"""
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            # Convert old boolean format to new dict format
+            # If True, enable all regions; if False, disable all regions
+            return {"uk": v, "eu": v, "us": v}
+        if isinstance(v, dict):
+            # Ensure all required keys exist
+            result = {"uk": False, "eu": False, "us": False}
+            result.update(v)
+            return result
+        return v
+
+    # Role preferences
+    role_type: Optional[List[str]] = Field(
+        default=None,
+        description="Type of roles (e.g., 'Full-time', 'Contract', 'Internship')",
+    )
+    role_level: Optional[List[str]] = Field(
+        default=None,
+        description="Level of roles (e.g., 'Junior', 'Mid', 'Senior', 'Lead')",
+    )
+    minimum_salary: Optional[int] = Field(
+        default=None, description="Minimum salary requirement"
+    )
+    role_priorities: Optional[List[str]] = Field(
+        default=None,
+        description="Priority aspects (e.g., 'Work-life balance', 'Learning', 'Impact')",
+    )
+
+    # Industry and technology preferences
+    favourite_industries: Optional[List[str]] = Field(
+        default=None, description="Preferred industries"
+    )
+    hidden_industries: Optional[List[str]] = Field(
+        default=None, description="Industries to avoid"
+    )
+    favourite_technologies: Optional[List[str]] = Field(
+        default=None, description="Preferred technologies/skills"
+    )
+    hidden_technologies: Optional[List[str]] = Field(
+        default=None, description="Technologies to avoid"
+    )
+
+    # Company preferences
+    company_size: Optional[List[str]] = Field(
+        default=None,
+        description="Preferred company sizes (e.g., 'Startup', 'Scale-up', 'Enterprise')",
+    )
+    followed_companies: Optional[List[str]] = Field(
+        default=None, description="List of company IDs to follow"
+    )
+    hidden_companies: Optional[List[str]] = Field(
+        default=None, description="List of company IDs to hide"
+    )
 
 
 # ============================================================================
@@ -45,6 +124,9 @@ class CandidateModel(BaseModel):
     metadata: Optional[CandidateMetadata] = Field(
         default=None, description="Additional candidate metadata including CV parsing"
     )
+    search_preferences: Optional[SearchPreferences] = Field(
+        default=None, description="Job search preferences and filters"
+    )
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -67,6 +149,9 @@ class CandidateUpdate(BaseModel):
     metadata: Optional[CandidateMetadata] = Field(
         default=None, description="Candidate metadata"
     )
+    search_preferences: Optional[SearchPreferences] = Field(
+        default=None, description="Job search preferences"
+    )
 
 
 class CandidateResponse(BaseModel):
@@ -79,6 +164,7 @@ class CandidateResponse(BaseModel):
     name: str = None
     email: Optional[str] = None
     metadata: Optional[CandidateMetadata] = None
+    search_preferences: Optional[SearchPreferences] = None
     created_at: datetime
     updated_at: datetime
 

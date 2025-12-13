@@ -6,7 +6,12 @@ from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Query
 import asyncio
 
-from .models import JobListingCreate, JobListingUpdate, JobListingModel
+from .models import (
+    JobListingCreate,
+    JobListingUpdate,
+    JobListingModel,
+    PaginatedJobListingResponse,
+)
 from .repository import job_listing_repository
 from .tasks import test_print_company_jobs
 
@@ -67,6 +72,58 @@ async def get_job_listings(
     return job_listing_repository.get_all_job_listings(
         skip=skip, limit=limit, status=status_filter
     )
+
+
+@router.get("/search", response_model=PaginatedJobListingResponse)
+async def search_job_listings(
+    company_id: Optional[str] = Query(None, description="Filter by company ID"),
+    country: Optional[str] = Query(None, description="Filter by country"),
+    city: Optional[str] = Query(None, description="Filter by city"),
+    origin: Optional[str] = Query(
+        None, description="Filter by origin (linkedin, greenhouse, workday, careers)"
+    ),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=100, description="Maximum records to return"),
+):
+    """
+    Search job listings with filters using efficient aggregation pipeline pagination
+
+    This endpoint uses MongoDB aggregation with $facet for optimal performance.
+    Results are sorted by most recent first (created_at descending).
+
+    - **company_id**: Filter by company ID
+    - **country**: Filter by country
+    - **city**: Filter by city
+    - **origin**: Filter by origin (linkedin, greenhouse, workday, careers)
+    - **skip**: Number of records to skip (default: 0)
+    - **limit**: Maximum records to return (default: 100, max: 100)
+
+    Returns paginated response with items, total count, skip, limit, and has_more flag.
+    """
+    try:
+        items, total = job_listing_repository.search_job_listings(
+            company_id=company_id,
+            country=country,
+            city=city,
+            origin=origin,
+            skip=skip,
+            limit=limit,
+        )
+
+        has_more = (skip + limit) < total
+
+        return PaginatedJobListingResponse(
+            items=items,
+            total=total,
+            skip=skip,
+            limit=limit,
+            has_more=has_more,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search job listings: {str(e)}",
+        )
 
 
 @router.get("/{job_listing_id}", response_model=JobListingModel)
