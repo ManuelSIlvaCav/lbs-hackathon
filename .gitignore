@@ -60,3 +60,6 @@ terraform.tfstate.*
 .terraform.tfstate.lock.info
 
 *.tfvars
+
+#celery
+celerybeat-schedule

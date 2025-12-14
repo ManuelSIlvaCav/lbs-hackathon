@@ -7,7 +7,12 @@ from pythonjsonlogger.json import JsonFormatter
 log_config = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {"json": {"()": JsonFormatter}},
+    "formatters": {
+        "json": {
+            "()": JsonFormatter,
+            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        }
+    },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",

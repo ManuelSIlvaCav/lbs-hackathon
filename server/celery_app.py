@@ -83,11 +83,6 @@ celery_app.autodiscover_tasks(
 from celery.schedules import crontab
 
 celery_app.conf.beat_schedule = {
-    # Example: Run a task every hour
-    # "refresh-job-listings": {
-    #     "task": "domains.job_listings.tasks.refresh_all_job_listings",
-    #     "schedule": 3600.0,  # Every hour
-    # },
     # Refresh job listings for followed companies daily at 5 AM London time
     # Uncomment to enable scheduled execution
     # "refresh-followed-companies-job-listings": {
@@ -104,6 +99,10 @@ celery_app.conf.beat_schedule = {
     #     "schedule": crontab(hour=6, minute=0),  # 6:00 AM UTC (London time in winter)
     #     # Note: For British Summer Time (UTC+1), use hour=5 instead
     #     # Or set timezone="Europe/London" and use hour=6
+    # },
+    # "revise-enriched-job-listings": {
+    #     "task": "domains.job_listings.tasks.revise_enriched_job_listings",
+    #     "schedule": 5 * 60,  # Every 5 minutes
     # },
 }
 

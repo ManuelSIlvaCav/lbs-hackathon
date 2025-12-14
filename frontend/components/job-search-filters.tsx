@@ -269,18 +269,27 @@ export function JobSearchFilters({
             <Select
               value={selectedRoleTitle || "all"}
               onValueChange={handleRoleTitleChange}
-              disabled={isLoading}
+              disabled={isLoading || !selectedProfileCategory}
             >
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select role..." />
+                <SelectValue
+                  placeholder={
+                    selectedProfileCategory
+                      ? "Select role..."
+                      : "Select category first"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Roles</SelectItem>
-                {searchOptions?.role_titles.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {role}
-                  </SelectItem>
-                ))}
+                {selectedProfileCategory &&
+                  searchOptions?.role_titles_by_category[
+                    selectedProfileCategory
+                  ]?.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {role}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

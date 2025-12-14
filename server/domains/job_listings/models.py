@@ -42,6 +42,7 @@ class JobListingMetadata(BaseModel):
     categorization_schema: Optional[AgentJobCategorizationSchema] = Field(
         default=None, description="Parsed job data from AgentJobCategorizationSchema"
     )
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat() if v else None}
@@ -134,6 +135,10 @@ class JobListingModel(BaseModel):
     )
     salary_currency: Optional[str] = Field(
         default=None, description="Currency of the salary range (e.g., USD, EUR)"
+    )
+    deactivated_at: Optional[datetime] = Field(
+        default=None,
+        description="When the job listing was deactivated due to parsing failure",
     )
     company_info: Optional[CompanyInfo] = Field(
         default=None,

@@ -23,6 +23,7 @@ from .models import (
 from .source_repository import job_listing_source_repository
 from database import get_collection
 from integrations.agents.job_listing_parser_agent import (
+    AgentJobCategorizationSchema,
     JobCategorizationInput,
     run_agent_job_categorization,
 )
@@ -497,9 +498,121 @@ class JobListingRepository:
 
         return job_listings
 
+    def deactivate_job_listing(
+        self,
+        job_id: str,
+    ) -> Optional[JobListingModel]:
+        """
+        Deactivate a job listing when parsing fails or job is no longer available
+
+        Args:
+            job_id: String representation of MongoDB ObjectId
+            metadata: Optional agent metadata to store even for failed parsing
+
+        Returns:
+            Updated JobListingModel if successful, None otherwise
+        """
+        try:
+            update_data = {
+                "source_status": "deactivated",
+                "deactivated_at": datetime.now(),
+                "updated_at": datetime.now(),
+            }
+
+            result: UpdateResult = self.collection.update_one(
+                {"_id": ObjectId(job_id)}, {"$set": update_data}
+            )
+
+            if result.modified_count > 0:
+                logger.info(
+                    "Job listing deactivated",
+                    extra={
+                        "context": "deactivate_job_listing",
+                        "job_listing_id": job_id,
+                    },
+                )
+                return self.get_job_listing_by_id(job_id)
+            return None
+        except Exception as e:
+            logger.error(
+                "Error deactivating job listing",
+                extra={
+                    "context": "deactivate_job_listing",
+                    "job_listing_id": job_id,
+                    "error_msg": str(e),
+                },
+            )
+            return None
+
+    def save_deactivation_souce_data(
+        self, job_id: str, parsed_job: Optional[AgentJobCategorizationSchema] = None
+    ):
+        try:
+            metadata = JobListingMetadata(
+                categorization_schema=parsed_job, updated_at=datetime.now()
+            )
+            # Save metadata to job_listings_source if provided
+            if metadata:
+                try:
+                    source = job_listing_source_repository.get_source_by_job_listing_id(
+                        job_id
+                    )
+                    if source:
+                        job_listing_source_repository.collection.update_one(
+                            {"job_listing_id": job_id},
+                            {
+                                "$set": {
+                                    "sources.job_listing_agent": metadata.model_dump(
+                                        mode="python"
+                                    ),
+                                    "updated_at": datetime.now(),
+                                }
+                            },
+                        )
+                    else:
+                        from .source_models import JobListingSourceFieldModel
+
+                        source_field = JobListingSourceFieldModel(
+                            job_listing_agent=metadata
+                        )
+                        job_listing_source_repository.collection.insert_one(
+                            {
+                                "job_listing_id": job_id,
+                                "sources": source_field.model_dump(mode="python"),
+                                "created_at": datetime.now(),
+                                "updated_at": datetime.now(),
+                            }
+                        )
+                    logger.info(
+                        "Stored agent metadata for deactivated job listing",
+                        extra={
+                            "context": "deactivate_job_listing",
+                            "job_listing_id": job_id,
+                        },
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Error storing metadata for deactivated job",
+                        extra={
+                            "context": "deactivate_job_listing",
+                            "job_listing_id": job_id,
+                            "error_msg": str(e),
+                        },
+                    )
+        except Exception as e:
+            logger.error(
+                "Error preparing metadata for deactivated job",
+                extra={
+                    "context": "deactivate_job_listing",
+                    "job_listing_id": job_id,
+                    "error_msg": str(e),
+                },
+            )
+
     async def enrich_job_listing(self, job_id: str) -> Optional[JobListingModel]:
         """
         Enrich a job listing by running the AI agent to extract structured data
+        If parsing fails, deactivates the job listing
 
         Args:
             job_id: String representation of MongoDB ObjectId
@@ -514,23 +627,12 @@ class JobListingRepository:
                 print(f"Job listing not found: {job_id}")
                 return None
 
-            # Run the agent to extract structured data
-            logger.info(
-                "Enriching job listing",
-                extra={
-                    "context": "enrich_job_listings",
-                    "job_listing_id": job_id,
-                    "job_title": job.title,
-                    "company_name": job.company_id,
-                },
-            )
             categorization_input = JobCategorizationInput(job_url=job.url)
             parsed_job = await run_agent_job_categorization(categorization_input)
 
             if not parsed_job:
-
                 logger.error(
-                    "Failed to parse job description",
+                    "Failed to parse job description, deactivating job listing",
                     extra={
                         "context": "enrich_job_listings",
                         "job_listing_id": job_id,
@@ -538,10 +640,35 @@ class JobListingRepository:
                         "company_name": job.company,
                     },
                 )
-                return None
+                # Deactivate the job listing since parsing failed (no metadata to store)
+                return self.deactivate_job_listing(job_id)
+
+            if parsed_job.result == "no_longer_available":
+                logger.info(
+                    "Job listing no longer available, deactivating job listing",
+                    extra={
+                        "context": "enrich_job_listings",
+                        "job_listing_id": job_id,
+                        "job_title": job.title,
+                        "company_name": job.company,
+                        "failed_result_error": (
+                            parsed_job.failed_result_error
+                            if hasattr(parsed_job, "failed_result_error")
+                            else None
+                        ),
+                    },
+                )
+
+                # Deactivate and store the metadata showing why it failed
+                deactivated_job_listing = self.deactivate_job_listing(job_id)
+                self.save_deactivation_souce_data(job_id, parsed_job)
+                return deactivated_job_listing
+            # Successful parsing
 
             # Create metadata object for storage in sources
-            metadata = JobListingMetadata(categorization_schema=parsed_job)
+            metadata = JobListingMetadata(
+                categorization_schema=parsed_job, updated_at=datetime.now()
+            )
 
             # Save metadata to job_listings_source collection
             # Get or create source document
@@ -612,7 +739,6 @@ class JobListingRepository:
             return self.get_job_listing_by_id(job_id)
 
         except Exception as e:
-            print(f"Error enriching job listing {job_id}: {e}")
             logger.error(
                 "Error enriching job listing",
                 extra={
@@ -811,10 +937,12 @@ class JobListingRepository:
                 match_stage["origin"] = origin
 
             if profile_category:
-                match_stage["profile_categories"] = profile_category
+                # Use $in operator to match any value in the array
+                match_stage["profile_categories"] = {"$in": [profile_category]}
 
             if role_title:
-                match_stage["role_titles"] = role_title
+                # Use $in operator to match any value in the array
+                match_stage["role_titles"] = {"$in": [role_title]}
 
             # Build aggregation pipeline with $facet for efficient pagination
             pipeline = []

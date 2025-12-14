@@ -14,7 +14,12 @@ from .models import (
     JobListingOrigin,
 )
 from .repository import job_listing_repository
-from .tasks import test_print_company_jobs
+from .tasks import (
+    revise_all_companies_enriched_jobs,
+    revise_company_enriched_jobs,
+    cleanup_stale_job_processes,
+)
+from .process_repository import job_process_repository
 from .categories import (
     get_all_profile_categories,
     get_all_role_titles,
@@ -147,7 +152,8 @@ async def get_search_options():
     Returns all distinct values for:
     - origins: Job sources (linkedin, greenhouse, workday, careers)
     - profile_categories: Job profile categories
-    - role_titles: Specific role titles
+    - role_titles: Specific role titles (flat list for backward compatibility)
+    - role_titles_by_category: Role titles organized by profile category
 
     This endpoint is used to populate search filter dropdowns in the frontend.
 
@@ -155,6 +161,8 @@ async def get_search_options():
         dict: Object containing arrays of available filter options
     """
     try:
+        from .categories import PROFILE_CATEGORIES
+
         # Get all profile categories
         profile_categories = get_all_profile_categories()
 
@@ -164,16 +172,189 @@ async def get_search_options():
         # Get all origins from enum
         origins = [origin.value for origin in JobListingOrigin]
 
+        # Get role titles organized by category
+        role_titles_by_category = {
+            category: sorted(roles) for category, roles in PROFILE_CATEGORIES.items()
+        }
+
         return {
             "origins": origins,
             "profile_categories": sorted(profile_categories),
             "role_titles": role_titles,
+            "role_titles_by_category": role_titles_by_category,
         }
 
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to fetch search options: {str(e)}",
+        )
+
+
+@router.post("/revise-enriched", response_model=dict)
+async def trigger_revise_enriched_job_listings():
+    """
+    Trigger coordinator task to revise all enriched job listings
+
+    This endpoint triggers a coordinator Celery task that:
+    - Gets all followed companies
+    - Triggers a separate task for each company
+    - Each company task processes all its enriched job listings in batches
+    - Deactivates listings that fail parsing
+
+    This is useful for:
+    - Validating existing enriched data
+    - Updating listings with improved parsing logic
+    - Cleaning up invalid or outdated job listings
+
+    Benefits of modular approach:
+    - Better progress tracking (per company)
+    - Parallel processing of different companies
+    - Individual company retries on failure
+    - Rate limit management per company
+
+    Check worker logs with: `docker-compose logs -f worker`
+
+    Returns:
+        dict: Task information including task_id for status tracking
+    """
+    try:
+        # Trigger the coordinator Celery task
+        task = revise_all_companies_enriched_jobs.delay()
+
+        return {
+            "status": "task_started",
+            "message": "Coordinator task to revise all companies has been queued",
+            "task_id": task.id,
+            "note": "This will trigger separate tasks for each company",
+            "instructions": "Check worker logs with: docker-compose logs -f worker",
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger task: {str(e)}",
+        )
+
+
+@router.post("/revise-company/{company_id}", response_model=dict)
+async def trigger_revise_company_job_listings(company_id: str):
+    """
+    Trigger task to revise enriched job listings for a specific company
+
+    This endpoint triggers a Celery task that:
+    - Gets all enriched job listings for the specified company
+    - Re-runs AI enrichment on each listing in batches
+    - Deactivates listings that fail parsing
+
+    Args:
+        company_id: ID of the company to process
+
+    Returns:
+        dict: Task information including task_id for status tracking
+    """
+    try:
+        from domains.companies.repository import company_repository
+
+        # Get company details
+        company = company_repository.get_company_by_id(company_id)
+        if not company:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Company with ID {company_id} not found",
+            )
+
+        # Trigger company-specific task
+        task = revise_company_enriched_jobs.delay(company_id, company.name)
+
+        return {
+            "status": "task_started",
+            "message": f"Task to revise job listings for {company.name} has been queued",
+            "company_id": company_id,
+            "company_name": company.name,
+            "task_id": task.id,
+            "instructions": "Check worker logs with: docker-compose logs -f worker",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger task: {str(e)}",
+        )
+
+
+@router.post("/cleanup-stale-processes", response_model=dict)
+async def trigger_cleanup_stale_processes(hours: int = 2):
+    """
+    Trigger cleanup of stale job process locks
+
+    This endpoint triggers a task to clean up locks from jobs that have been
+    processing for too long (likely due to crashes or hung processes).
+
+    Args:
+        hours: Number of hours after which a lock is considered stale (default: 2)
+
+    Returns:
+        dict: Task information including task_id
+    """
+    try:
+        task = cleanup_stale_job_processes.delay(hours=hours)
+
+        return {
+            "status": "task_started",
+            "message": f"Cleanup task queued for locks older than {hours} hours",
+            "task_id": task.id,
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger cleanup: {str(e)}",
+        )
+
+
+@router.get("/task-status/{task_name}", response_model=dict)
+async def get_task_status(task_name: str):
+    """
+    Get the current processing status/lock for a task
+
+    Args:
+        task_name: Name of the task (e.g., 'revise_enriched_job_listings')
+
+    Returns:
+        dict: Lock status information or None if no lock exists
+    """
+    try:
+        lock_status = job_process_repository.get_lock_status(task_name)
+
+        if lock_status:
+            return {
+                "has_lock": True,
+                "task_name": lock_status.task_name,
+                "task_instance_id": lock_status.task_instance_id,
+                "status": lock_status.status,
+                "started_at": lock_status.started_at.isoformat(),
+                "completed_at": (
+                    lock_status.completed_at.isoformat()
+                    if lock_status.completed_at
+                    else None
+                ),
+                "error_message": lock_status.error_message,
+                "retry_count": lock_status.retry_count,
+            }
+        else:
+            return {
+                "has_lock": False,
+                "task_name": task_name,
+                "message": "No active or recent task found",
+            }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get task status: {str(e)}",
         )
 
 
@@ -273,39 +454,6 @@ async def enrich_job_listing(job_listing_id: str):
         )
 
 
-@router.post("/company/{company_id}/test-print-jobs")
-async def test_print_company_jobs_route(company_id: str):
-    """
-    Test endpoint that triggers a Celery task to retrieve and print all job listings for a company
-
-    This is a demonstration of Celery task integration. The task will:
-    - Retrieve all job listings for the specified company
-    - Print details of each job to the worker console logs
-    - Return task ID for status tracking
-
-    Check worker logs with: `docker-compose logs -f worker`
-
-    - **company_id**: MongoDB ObjectId as string for the company
-    """
-    try:
-        # Trigger the Celery task
-        task = test_print_company_jobs.delay(company_id)
-
-        return {
-            "status": "task_started",
-            "message": f"Task to print job listings for company {company_id} has been queued",
-            "task_id": task.id,
-            "company_id": company_id,
-            "instructions": "Check worker logs with: docker-compose logs -f worker",
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger task: {str(e)}",
-        )
-
-
 @router.get("/tasks/{task_id}/status")
 async def get_task_status(task_id: str):
     """
@@ -343,4 +491,92 @@ async def get_task_status(task_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to check task status: {str(e)}",
+        )
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=dict)
+async def cancel_task(
+    task_id: str,
+    is_chain: bool = Query(False, description="Set to true if canceling a chain"),
+):
+    """
+    Cancel/revoke a Celery task or chain of tasks
+
+    This endpoint can cancel:
+    - Individual tasks: Set is_chain=false (default)
+    - Chain of tasks: Set is_chain=true
+
+    When canceling a chain:
+    - Revokes the chain task itself
+    - Iterates through all tasks in the chain
+    - Revokes each task individually
+    - Terminates any currently running tasks
+
+    Args:
+        task_id: Celery task ID or chain ID to cancel
+        is_chain: Whether the task_id is a chain (default: false)
+
+    Returns:
+        dict: Cancellation status and details
+    """
+    try:
+        from celery_app import celery_app
+        from celery.result import AsyncResult
+
+        if is_chain:
+            # Cancel chain of tasks
+            chain_result = celery_app.AsyncResult(task_id)
+
+            # Revoke the chain task itself
+            chain_result.revoke(terminate=True, signal="SIGKILL")
+
+            cancelled_tasks = [task_id]
+
+            # For chains, we need to get and revoke all child tasks
+            # In Celery 5+, chains store results as parent-child relationships
+            try:
+                # Try to iterate through the chain results
+                current = chain_result
+                while current and not current.ready():
+                    # Revoke the current task
+                    current.revoke(terminate=True, signal="SIGKILL")
+                    cancelled_tasks.append(str(current.id))
+
+                    # Move to the next task in the chain
+                    # In Celery 5+, chains use the result as parent for the next task
+                    try:
+                        if hasattr(current, "children") and current.children:
+                            current = current.children[0]
+                        else:
+                            break
+                    except (AttributeError, IndexError):
+                        break
+
+            except Exception as chain_error:
+                # If we can't iterate the chain, at least we revoked the main chain task
+                pass
+
+            return {
+                "status": "cancelled",
+                "message": f"Chain and {len(cancelled_tasks)} task(s) cancelled",
+                "task_id": task_id,
+                "is_chain": True,
+                "cancelled_tasks": cancelled_tasks,
+            }
+        else:
+            # Cancel individual task
+            task_result = celery_app.AsyncResult(task_id)
+            task_result.revoke(terminate=True, signal="SIGKILL")
+
+            return {
+                "status": "cancelled",
+                "message": "Task cancelled successfully",
+                "task_id": task_id,
+                "is_chain": False,
+            }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cancel task: {str(e)}",
         )

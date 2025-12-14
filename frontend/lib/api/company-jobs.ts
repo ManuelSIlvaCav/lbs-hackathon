@@ -7,7 +7,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
  */
 export async function getCompanyJobListings(
   companyId: string,
-  token?: string
+  token?: string,
+  forceRefresh?: boolean
 ): Promise<JobListing[]> {
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -17,13 +18,15 @@ export async function getCompanyJobListings(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetch(
-    `${API_BASE_URL}/api/companies/${companyId}/job-listings`,
-    {
-      method: "GET",
-      headers,
-    }
-  );
+  const url = new URL(`${API_BASE_URL}/api/companies/${companyId}/job-listings`);
+  if (forceRefresh) {
+    url.searchParams.set('force_refresh', 'true');
+  }
+
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers,
+  });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Unknown error" }));

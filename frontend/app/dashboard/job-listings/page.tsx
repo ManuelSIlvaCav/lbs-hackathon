@@ -5,14 +5,11 @@ import { JobSearchFilters } from "@/components/job-search-filters";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Company } from "@/contexts/admin-company-context";
 import { jobListingApi } from "@/lib/api/job-listing";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export default function JobListingsPage() {
-  const [jobUrl, setJobUrl] = useState("");
-  const queryClient = useQueryClient();
-
   // Search filters
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
   const [selectedCountry, setSelectedCountry] = useState("");

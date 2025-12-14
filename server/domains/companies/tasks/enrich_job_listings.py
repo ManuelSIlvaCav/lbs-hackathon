@@ -7,7 +7,6 @@ from celery import shared_task
 from datetime import datetime
 import asyncio
 import logging
-import os
 
 from ..repository import company_repository
 from .utils import get_followed_company_ids
@@ -18,7 +17,7 @@ logger = logging.getLogger("app")
 
 # Configuration
 
-BATCH_SIZE = 10  # Process 10 job listings at a time
+BATCH_SIZE = 12  # Process 12 job listings at a time
 
 
 @shared_task(name="domains.companies.tasks.enrich_job_listings")

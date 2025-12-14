@@ -9,6 +9,7 @@ interface JobSearchOptions {
   origins: string[];
   profile_categories: string[];
   role_titles: string[];
+  role_titles_by_category: Record<string, string[]>;
 }
 
 interface JobSearchFiltersContextType {

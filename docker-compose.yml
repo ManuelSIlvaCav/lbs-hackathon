@@ -49,7 +49,7 @@ services:
     depends_on:
       - mongo
       - redis
-    command: celery -A celery_app worker --loglevel=info
+    command: celery -A celery_app worker --loglevel=info -B
     networks:
       - app-network
     restart: unless-stopped

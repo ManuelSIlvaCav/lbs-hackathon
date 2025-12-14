@@ -39,6 +39,12 @@ https://app.apollo.io
 
 # Costs on OpenAI
 
+https://platform.openai.com/docs/pricing
+
+Each Job Listing
+Input 10k
+Output 2k
+
 ## Open AI gpt-4.1-mini
 
 Input:
@@ -50,16 +56,10 @@ $3.20 / 1M tokens
 Training:
 $5.00 / 1M tokens
 
-Each Job Listing
-Input 10k
-Output 1k
-
 Per 10k job listings
 
 - 80 USD Input
 - 32 USD Output
-
----
 
 132 USD Total per 10k Job Listings
 
@@ -72,15 +72,25 @@ $0.005 / 1M tokens
 Output:
 $0.400 / 1M tokens
 
-Each Job Listing
-Input 10k
-Output 2k
-
 Per 10k Job Listing
 
 - 5 USD Input
 - 8 USD Output
 
----
-
 13 USD Per 10k Job Listings
+
+# Open AI gpt-5-mini
+
+Input:
+$0.25 / 1M tokens
+Cached input:
+$0.025 / 1M tokens
+Output:
+$2 / 1M tokens
+
+Per 10k Job Listing
+
+- 27.5 Input
+- 40 Output
+
+  67.5 USD per 10k Job Listings

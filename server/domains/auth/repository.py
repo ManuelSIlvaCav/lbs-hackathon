@@ -24,7 +24,6 @@ class UserRepository:
 
         # Create unique index on email
         self.collection.create_index("email", unique=True)
-        logger.info("UserRepository initialized")
 
     def create_user(self, user_create: UserCreate) -> UserInDB:
         """

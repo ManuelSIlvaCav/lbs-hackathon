@@ -3,6 +3,7 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useJobSearchFilters } from "@/contexts/job-search-filters-context";
 import { useEffect, useRef, useState } from "react";
 
 interface RoleStepProps {
@@ -46,11 +47,19 @@ export function RoleStep({ data, onChange }: RoleStepProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  const { searchOptions, isLoading } = useJobSearchFilters();
+
   const [roleType, setRoleType] = useState<string[]>(data.role_type || []);
   const [roleLevel, setRoleLevel] = useState<string[]>(data.role_level || []);
   const [minimumSalary, setMinimumSalary] = useState(data.minimum_salary || "");
   const [rolePriorities, setRolePriorities] = useState<string[]>(
     data.role_priorities || []
+  );
+  const [profileCategories, setProfileCategories] = useState<string[]>(
+    data.profile_categories || []
+  );
+  const [roleTitles, setRoleTitles] = useState<string[]>(
+    data.role_titles || []
   );
 
   useEffect(() => {
@@ -59,8 +68,17 @@ export function RoleStep({ data, onChange }: RoleStepProps) {
       role_level: roleLevel,
       minimum_salary: minimumSalary ? parseInt(minimumSalary) : null,
       role_priorities: rolePriorities,
+      profile_categories: profileCategories,
+      role_titles: roleTitles,
     });
-  }, [roleType, roleLevel, minimumSalary, rolePriorities]);
+  }, [
+    roleType,
+    roleLevel,
+    minimumSalary,
+    rolePriorities,
+    profileCategories,
+    roleTitles,
+  ]);
 
   const toggleItem = (
     item: string,
@@ -71,6 +89,21 @@ export function RoleStep({ data, onChange }: RoleStepProps) {
       setter(list.filter((i) => i !== item));
     } else {
       setter([...list, item]);
+    }
+  };
+
+  const toggleCategory = (category: string) => {
+    if (profileCategories.includes(category)) {
+      // Remove category
+      setProfileCategories(profileCategories.filter((c) => c !== category));
+
+      // Remove all role titles from this category
+      const categoryRoles =
+        searchOptions?.role_titles_by_category[category] || [];
+      setRoleTitles(roleTitles.filter((role) => !categoryRoles.includes(role)));
+    } else {
+      // Add category
+      setProfileCategories([...profileCategories, category]);
     }
   };
 
@@ -228,6 +261,103 @@ export function RoleStep({ data, onChange }: RoleStepProps) {
           ))}
         </div>
       </div>
+
+      {/* Profile Categories */}
+      <div className="border-t pt-6">
+        <h2 className="text-2xl font-semibold mb-2 font-sora">
+          Profile Categories
+        </h2>
+        <p className="text-muted-foreground mb-6 font-inter">
+          Select the job categories you're interested in
+        </p>
+
+        {isLoading ? (
+          <div className="text-center py-8 text-muted-foreground">
+            Loading categories...
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
+            {searchOptions?.profile_categories.map((category) => (
+              <Label
+                key={category}
+                htmlFor={`category-${category}`}
+                className={`flex items-center space-x-3 p-4 rounded-lg cursor-pointer transition-colors ${
+                  profileCategories.includes(category)
+                    ? "bg-green-200 hover:bg-green-300"
+                    : "bg-muted/50 hover:bg-muted"
+                }`}
+              >
+                <Checkbox
+                  id={`category-${category}`}
+                  checked={profileCategories.includes(category)}
+                  onCheckedChange={() => toggleCategory(category)}
+                  className={
+                    profileCategories.includes(category)
+                      ? "border-green-600 data-[state=checked]:bg-green-600"
+                      : ""
+                  }
+                />
+                <span className="flex-1 font-medium font-inter text-sm">
+                  {category}
+                </span>
+              </Label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Role Titles - Only show if categories are selected */}
+      {profileCategories.length > 0 && (
+        <div className="border-t pt-6">
+          <h2 className="text-2xl font-semibold mb-2 font-sora">
+            Specific Roles
+          </h2>
+          <p className="text-muted-foreground mb-6 font-inter">
+            Select specific roles within your chosen categories
+          </p>
+
+          <div className="space-y-4">
+            {profileCategories.map((category) => (
+              <div key={category} className="space-y-2">
+                <h3 className="text-lg font-semibold font-sora text-green-700">
+                  {category}
+                </h3>
+                <div className="grid grid-cols-2 gap-2 pl-4">
+                  {searchOptions?.role_titles_by_category[category]?.map(
+                    (role) => (
+                      <Label
+                        key={role}
+                        htmlFor={`role-${role}`}
+                        className={`flex items-center space-x-2 p-3 rounded-lg cursor-pointer transition-colors ${
+                          roleTitles.includes(role)
+                            ? "bg-green-100 hover:bg-green-200"
+                            : "bg-muted/30 hover:bg-muted/50"
+                        }`}
+                      >
+                        <Checkbox
+                          id={`role-${role}`}
+                          checked={roleTitles.includes(role)}
+                          onCheckedChange={() =>
+                            toggleItem(role, roleTitles, setRoleTitles)
+                          }
+                          className={
+                            roleTitles.includes(role)
+                              ? "border-green-600 data-[state=checked]:bg-green-600"
+                              : ""
+                          }
+                        />
+                        <span className="flex-1 font-medium font-inter text-sm">
+                          {role}
+                        </span>
+                      </Label>
+                    )
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

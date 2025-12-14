@@ -3,6 +3,8 @@ from pydantic import BaseModel
 from agents import Agent, ModelSettings, Runner
 from typing import Optional
 
+from enum import Enum
+
 from domains.job_listings.categories import (
     EMPLOYMENT_TYPES,
     PROFILE_CATEGORIES,
@@ -85,6 +87,18 @@ class AgentJobCategorizationSchema__Requirements(BaseModel):
     )
 
 
+class AgentResult(str, Enum):
+    SUCCESS = "success"
+    NO_LONGER_AVAILABLE = "no_longer_available"
+
+
+class FailedResultError(str, Enum):
+    PARSING_FAILED = "parsing_failed"
+    JOB_NOT_FOUND = "job_not_found"
+    NO_LONGER_AVAILABLE = "no_longer_available"
+    OTHER = "other"
+
+
 class AgentJobCategorizationSchema(BaseModel):
     job_info: AgentJobCategorizationSchema__JobInfo = (
         AgentJobCategorizationSchema__JobInfo()
@@ -93,6 +107,8 @@ class AgentJobCategorizationSchema(BaseModel):
         AgentJobCategorizationSchema__Requirements()
     )
     description_summary: str | None = None
+    result: AgentResult | None = None
+    failed_result_error: FailedResultError | None = None
 
 
 INSTRUCTIONS = f"""You are an expert job description parser. Your task is to read a Job Description (JD) and output one and only one JSON object that strictly follows the schema provided below. No explanations, no comments, no extra text.
@@ -107,6 +123,49 @@ Use null for single value fields
 Use [] for lists
 Use "" for summaries
 Never hallucinate. Never invent degrees, skills, industries, years of experience, or company types that are not clearly present or strongly implied in the JD.
+
+== JOB AVAILABILITY CHECK (CRITICAL - CHECK THIS FIRST) ==
+BEFORE parsing any job details, you MUST check if the job posting explicitly states it is closed or unavailable.
+
+IMPORTANT: Only set result to "no_longer_available" if you find EXPLICIT, UNAMBIGUOUS language that the job is closed. This must be a clear statement about the job status, NOT part of the job description content.
+
+Look for EXPLICIT closure indicators (these are typically at the TOP of the page or in a banner):
+- "This job is closed" or "Job closed"
+- "No longer accepting applications" or "Applications are closed"  
+- "This position has been filled"
+- "Job posting has expired" or "This posting has expired"
+- "This role is no longer available"
+- "We are not accepting new applications for this role"
+- Any other clear system message or status banner indicating the job is closed/unavailable
+- LinkedIn-specific: "No longer accepting applications" banner
+- LinkedIn-specific: Look for the tag html "artdeco-inline-feedback__message" with text indicating closure
+
+These indicators must be SEPARATE from the job description itself - they are status messages about the posting.
+
+DO NOT flag as unavailable based on:
+- Normal job description content about deadlines, application processes, or requirements
+- Phrases like "apply by [date]" or "deadline" within the job description (these are normal)
+- Mentions of "closing date" or "application deadline" in the job details
+- Vague or indirect language
+- Job requirements or qualifications
+- Standard application instructions like "how to apply"
+- Any text that is part of the actual job description or requirements
+- Company information or "about us" sections
+- Role descriptions or responsibilities
+
+CRITICAL: The closure indicator must be a SYSTEM MESSAGE or STATUS BANNER, not part of the job content itself.
+
+If you find EXPLICIT closure indicators (status banner/system message):
+1. Set result to "no_longer_available"
+2. Set failed_result_error to "no_longer_available"
+3. Still attempt to parse other fields if possible for tracking purposes
+
+If the job posting appears active OR you're unsure OR the only "closure" mentions are within job description content:
+1. Set result to "success"
+2. Set failed_result_error to null
+3. Continue with normal parsing
+
+DEFAULT ASSUMPTION: Assume the job IS available (result="success") unless you find a clear status banner/message. When in doubt, use "success".
 
 WHERE TO LOOK IN THE JD (MANDATORY)
 You must actively search for requirements in all parts of the JD, especially in sections with titles or phrases such as:
@@ -261,6 +320,20 @@ Pick all that clearly apply based on the core responsibilities.
 == DESCRIPTION SUMMARY ==
 description_summary must be a short 2 to 3 sentence summary of what the role is about (responsibilities and scope), not the requirements.
 
+== RESULT FIELD (MANDATORY) ==
+The result field MUST be populated with one of these values:
+- "success": Use this when you successfully parsed the job AND the job posting is open/available (or status is unclear)
+- "no_longer_available": Use this ONLY when the job posting EXPLICITLY states it is closed or unavailable
+
+The failed_result_error field:
+- Set to null when result is "success"
+- Set to "no_longer_available" when result is "no_longer_available"
+- Set to "parsing_failed" if you cannot extract meaningful job information from the content
+- Set to "job_not_found" if the page shows a 404 or "job not found" error
+- Set to "other" for any other failure scenario
+
+Both fields are REQUIRED and must never be null. When in doubt about availability, use result="success" with failed_result_error=null.
+
 == PROFILE CATEGORIES HANDLING ==
 You need to determine the up to 3 profile_categories that best fit the job description in order of match from the predefined list of {PROFILE_CATEGORIES}. Analyze the job description carefully to identify key skills, responsibilities, and requirements that align with these categories. Select the three categories that most accurately represent the role and include them in the 'profile_categories' field of the output JSON. If fewer than three categories are applicable, include only those that are relevant.
 
@@ -373,8 +446,15 @@ Internal slogans, taglines, or generic fluff about the company
 Only extract content that describes what the candidate must or should have.
 
 == OUTPUT FORMAT ==
-FINAL INSTRUCTION
-Read the JD. Actively search for requirement like content in all relevant sections (including "Requirements", "Minimum qualifications", "Preferred qualifications", "You may be a good fit if you have", etc.). Classify every requirement precisely into minimum or preferred using the sentence level wording. Encode any OR logic using the [orX] tagging convention inside list values. Fill every field of the JSON strictly according to the schema and rules above. Output only the final JSON object and nothing else.
+== FINAL INSTRUCTION ==
+1. FIRST: Check if the job posting EXPLICITLY states it is closed/unavailable. Be CONSERVATIVE - only flag as unavailable if CERTAIN. Set result and failed_result_error accordingly.
+2. Read the JD. Actively search for requirement content in all relevant sections (including "Requirements", "Minimum qualifications", "Preferred qualifications", "You may be a good fit if you have", etc.).
+3. Classify every requirement precisely into minimum or preferred using the sentence level wording.
+4. Encode any OR logic using the [orX] tagging convention inside list values.
+5. Fill every field of the JSON strictly according to the schema and rules above.
+6. Ensure the result field is populated ("success" or "no_longer_available") and failed_result_error is set appropriately (null for success, or the specific error type).
+7. When in doubt about availability, default to result="success" with failed_result_error=null.
+8. Output only the final JSON object and nothing else.
 """
 
 agent_job_categorization = Agent(
@@ -383,9 +463,6 @@ agent_job_categorization = Agent(
     model="gpt-5-nano",
     output_type=AgentJobCategorizationSchema,
     model_settings=ModelSettings(
-        # Not supported on reasoning
-        # temperature=0.2,
-        # top_p=0.2,
         store=True,
         reasoning=Reasoning(effort="low"),
     ),
@@ -455,6 +532,11 @@ async def run_agent_job_categorization(
 
     except Exception as e:
         logger.error(
-            f"Error running Job parser for {categorization_input.job_url}: {e}"
+            f"Error running Job parser",
+            extra={
+                "context": "job_listing_parsing",
+                "job_url": categorization_input.job_url,
+                "error_msg": str(e),
+            },
         )
-        return None
+        raise Exception(f"Error running Job parser: {str(e)}") from e

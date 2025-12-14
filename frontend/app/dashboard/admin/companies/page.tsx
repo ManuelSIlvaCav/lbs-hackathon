@@ -28,6 +28,7 @@ export default function AdminCompaniesPage() {
   const [enriching, setEnriching] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoadingJobsNew, setIsLoadingJobsNew] = useState(false);
   const { token } = useAuth();
 
   const handleCompanyCreated = (company: Company) => {
@@ -62,6 +63,32 @@ export default function AdminCompaniesPage() {
       setShowJobs(false);
     } finally {
       setIsLoadingJobs(false);
+    }
+  };
+
+  const handleGetJobsNew = async () => {
+    if (!selectedCompany?._id) return;
+
+    setIsLoadingJobsNew(true);
+    setShowJobs(true);
+
+    try {
+      const jobs = await getCompanyJobListings(
+        selectedCompany._id,
+        token || undefined,
+        true // force_refresh
+      );
+      setJobListings(jobs);
+      toast.success(
+        `Fetched ${jobs.length} fresh job listings (quota consumed)`
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to fetch job listings";
+      toast.error(message);
+      setShowJobs(false);
+    } finally {
+      setIsLoadingJobsNew(false);
     }
   };
 
@@ -172,16 +199,37 @@ export default function AdminCompaniesPage() {
                 </Button>
               )}
               {isEnriched && (
-                <Button
-                  onClick={handleGetJobs}
-                  disabled={isLoadingJobs}
-                  size="sm"
-                  variant="outline"
-                  className="gap-2"
-                >
-                  <Briefcase className="h-4 w-4" />
-                  {isLoadingJobs ? "Loading..." : "Get Jobs"}
-                </Button>
+                <>
+                  <Button
+                    onClick={handleGetJobs}
+                    disabled={isLoadingJobs || isLoadingJobsNew}
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Briefcase className="h-4 w-4" />
+                    {isLoadingJobs ? "Loading..." : "Get Jobs"}
+                  </Button>
+                  <Button
+                    onClick={handleGetJobsNew}
+                    disabled={isLoadingJobs || isLoadingJobsNew}
+                    size="sm"
+                    variant="destructive"
+                    className="gap-2"
+                  >
+                    {isLoadingJobsNew ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Fetching...
+                      </>
+                    ) : (
+                      <>
+                        <Briefcase className="h-4 w-4" />
+                        Get Jobs New
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
             </div>
           </CardHeader>
