@@ -22,8 +22,9 @@ MIN_CONTENT_LENGTH = 100
 LINKEDIN_SELECTORS = [
     ".jobs-description",
     ".job-details",
+    "[id*='main-content']",
+    ".details",
     "[class*='job-view']",
-    ".show-more-less-html__markup",
 ]
 
 # Generic selectors for other job sites
@@ -123,13 +124,29 @@ async def _scrape_with_browser(job_url: str, timeout: int) -> Optional[str]:
             page = await context.new_page()
 
             # Navigate to the URL
-            await page.goto(job_url, wait_until="domcontentloaded", timeout=timeout)
+            response = await page.goto(
+                job_url, wait_until="domcontentloaded", timeout=timeout
+            )
 
             # Wait for dynamic content
             await page.wait_for_timeout(DEFAULT_WAIT_TIME)
 
             # Determine if it's a LinkedIn URL
             is_linkedin = "linkedin.com" in job_url
+
+            # Check for redirects (especially for LinkedIn expired jobs)
+            final_url = page.url
+            if is_linkedin and _is_linkedin_redirect(job_url, final_url):
+                logger.warning(
+                    "LinkedIn job redirect detected (likely expired job)",
+                    extra={
+                        "context": "scrape_job_description",
+                        "original_url": job_url,
+                        "final_url": final_url,
+                    },
+                )
+                # Return a marker text that the parser agent can detect
+                return "PAGE_NOT_FOUND"
 
             # Wait for appropriate selectors
             await _wait_for_content_selectors(page, is_linkedin, job_url)
@@ -206,9 +223,12 @@ async def _extract_text_content(page: Page, is_linkedin: bool) -> str:
             """
             () => {
                 // Try to get LinkedIn job description specifically
-                const jobDesc = document.querySelector('.show-more-less-html__markup') || 
+                const jobDesc = 
                                document.querySelector('.jobs-description') ||
-                               document.querySelector('.job-details');
+                               document.querySelector('.job-details') ||
+                               document.querySelector("[id*='main-content']") ||
+                               document.querySelector('.details') ||
+                               document.querySelector("[class*='job-view']");
                 
                 if (jobDesc) {
                     return jobDesc.innerText || jobDesc.textContent || '';
@@ -236,6 +256,42 @@ async def _extract_text_content(page: Page, is_linkedin: bool) -> str:
         return text_content
 
 
+def _is_linkedin_redirect(original_url: str, final_url: str) -> bool:
+    """Check if LinkedIn redirected from a specific job to a generic page.
+
+    Args:
+        original_url: The URL we initially requested
+        final_url: The URL we ended up on after navigation
+
+    Returns:
+        True if this appears to be a redirect indicating expired/missing job
+    """
+    # If URLs are the same, no redirect occurred
+    if original_url == final_url:
+        return False
+
+    # Extract path from both URLs
+    from urllib.parse import urlparse
+
+    original_path = urlparse(original_url).path.lower()
+    final_path = urlparse(final_url).path.lower()
+
+    # Check if original was a specific job URL but final is generic
+    # LinkedIn job URLs typically: /jobs/view/{job_id}
+    if "/jobs/view/" in original_path and "/jobs/view/" not in final_path:
+        return True
+
+    # Check if redirected to main jobs page
+    if final_path in ["/jobs", "/jobs/", "/jobs/search", "/jobs/search/"]:
+        return True
+
+    # Check if redirected to error/not-found page
+    if "error" in final_path or "not-found" in final_path:
+        return True
+
+    return False
+
+
 def _validate_content(text_content: str, job_url: str) -> Optional[str]:
     """Validate the extracted content meets minimum requirements.
 
@@ -247,6 +303,15 @@ def _validate_content(text_content: str, job_url: str) -> Optional[str]:
         Text content if valid, or None if too short
     """
     if text_content and len(text_content) > MIN_CONTENT_LENGTH:
+        logger.info(
+            "Successfully scraped job description",
+            extra={
+                "context": "scrape_job_description",
+                "job_url": job_url,
+                "length": len(text_content),
+                "preview": text_content,
+            },
+        )
         return text_content
     else:
         logger.warning(

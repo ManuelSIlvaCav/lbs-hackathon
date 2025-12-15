@@ -8,7 +8,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 export async function getCompanyJobListings(
   companyId: string,
   token?: string,
-  forceRefresh?: boolean
+  forceRefresh?: boolean,
+  sourceStatus?: string
 ): Promise<JobListing[]> {
   const headers: HeadersInit = {
     "Content-Type": "application/json",
@@ -21,6 +22,9 @@ export async function getCompanyJobListings(
   const url = new URL(`${API_BASE_URL}/api/companies/${companyId}/job-listings`);
   if (forceRefresh) {
     url.searchParams.set('force_refresh', 'true');
+  }
+  if (sourceStatus) {
+    url.searchParams.set('source_status', sourceStatus);
   }
 
   const response = await fetch(url.toString(), {

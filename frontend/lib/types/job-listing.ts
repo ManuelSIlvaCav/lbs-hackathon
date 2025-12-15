@@ -87,7 +87,7 @@ export interface JobListing {
   employement_type?: string;
   work_arrangement?: string;
   listing_status?: "active" | "expired";
-  source_status?: "enriched" | "scrapped" | "active";
+  source_status?: "enriched" | "scrapped" | "active" | "deactivated";
   salary_range_min?: number;
   salary_range_max?: number;
   salary_currency?: string;

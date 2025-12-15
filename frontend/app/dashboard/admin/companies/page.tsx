@@ -11,6 +11,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Company } from "@/contexts/admin-company-context";
 import { useAuth } from "@/contexts/auth-context";
 import { getCompanyJobListings } from "@/lib/api/company-jobs";
@@ -29,6 +36,7 @@ export default function AdminCompaniesPage() {
   const [selectedJob, setSelectedJob] = useState<JobListing | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoadingJobsNew, setIsLoadingJobsNew] = useState(false);
+  const [sourceStatus, setSourceStatus] = useState<string>("all");
   const { token } = useAuth();
 
   const handleCompanyCreated = (company: Company) => {
@@ -52,7 +60,9 @@ export default function AdminCompaniesPage() {
     try {
       const jobs = await getCompanyJobListings(
         selectedCompany._id,
-        token || undefined
+        token || undefined,
+        false,
+        sourceStatus === "all" ? undefined : sourceStatus
       );
       setJobListings(jobs);
       toast.success(`Found ${jobs.length} job listings`);
@@ -76,7 +86,8 @@ export default function AdminCompaniesPage() {
       const jobs = await getCompanyJobListings(
         selectedCompany._id,
         token || undefined,
-        true // force_refresh
+        true, // force_refresh
+        sourceStatus === "all" ? undefined : sourceStatus
       );
       setJobListings(jobs);
       toast.success(
@@ -179,7 +190,21 @@ export default function AdminCompaniesPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
             <CardTitle>Company Details</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {isEnriched && (
+                <Select value={sourceStatus} onValueChange={setSourceStatus}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="enriched">Enriched</SelectItem>
+                    <SelectItem value="scrapped">Scrapped</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="deactivated">Deactivated</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               {!selectedCompany.description && (
                 <Button
                   onClick={handleEnrich}

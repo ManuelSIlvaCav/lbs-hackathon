@@ -103,12 +103,14 @@ class JobListingRepository:
         parsed_job = None
         if job_data.url:
             try:
-                print(f"Parsing job description for: {job_data.title or job_data.url}")
-                categorization_input = JobCategorizationInput(job_url=job_data.url)
+
+                categorization_input = JobCategorizationInput(
+                    job_url=job_data.url, job_id=None
+                )
                 parsed_job = await run_agent_job_categorization(categorization_input)
                 if parsed_job:
                     metadata = JobListingMetadata(categorization_schema=parsed_job)
-                    print(f"Job parsing successful: {parsed_job.job_info.job_title}")
+
             except Exception as e:
                 print(f"Error parsing job description: {e}")
                 # Continue without metadata if parsing fails
@@ -452,12 +454,14 @@ class JobListingRepository:
     def get_job_listings_by_company(
         self,
         company_id: str,
+        source_status: Optional[str] = None,
     ) -> List[JobListingModel]:
         """
         Get all job listings for a company
 
         Args:
             company_id: Company ID to filter by
+            source_status: Optional filter by source status (enriched, scrapped, active, deactivated)
 
         Returns:
             List of JobListingModel objects
@@ -466,8 +470,14 @@ class JobListingRepository:
         company_oid = (
             ObjectId(company_id) if isinstance(company_id, str) else company_id
         )
-        cursor = self.collection.find({"company_id": company_oid}).sort(
-            "last_seen_at", -1
+
+        # Build query filter
+        query_filter = {"company_id": company_oid}
+        if source_status:
+            query_filter["source_status"] = source_status
+
+        cursor = self.collection.find(query_filter).sort(
+            "last_seen_at" if source_status == "enriched" else "deactivated_at", -1
         )
 
         job_listings = []
@@ -627,7 +637,9 @@ class JobListingRepository:
                 print(f"Job listing not found: {job_id}")
                 return None
 
-            categorization_input = JobCategorizationInput(job_url=job.url)
+            categorization_input = JobCategorizationInput(
+                job_url=job.url, job_id=job_id
+            )
             parsed_job = await run_agent_job_categorization(categorization_input)
 
             if not parsed_job:

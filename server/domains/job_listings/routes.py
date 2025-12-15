@@ -5,6 +5,7 @@ API routes for job listing operations
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, status, Query
 import asyncio
+import logging
 
 from .models import (
     JobListingCreate,
@@ -25,6 +26,7 @@ from .categories import (
     get_all_role_titles,
 )
 
+logger = logging.getLogger("app")
 
 router = APIRouter(prefix="/api/job-listings", tags=["job-listings"])
 
@@ -508,8 +510,9 @@ async def cancel_task(
 
     When canceling a chain:
     - Revokes the chain task itself
-    - Iterates through all tasks in the chain
-    - Revokes each task individually
+    - Looks up child tasks in JobProcess repository by parent_instance_id
+    - Revokes each child task in Celery
+    - Releases all child task locks in the repository
     - Terminates any currently running tasks
 
     Args:
@@ -521,7 +524,6 @@ async def cancel_task(
     """
     try:
         from celery_app import celery_app
-        from celery.result import AsyncResult
 
         if is_chain:
             # Cancel chain of tasks
@@ -531,19 +533,60 @@ async def cancel_task(
             chain_result.revoke(terminate=True, signal="SIGKILL")
 
             cancelled_tasks = [task_id]
+            locks_released = 0
 
-            # For chains, we need to get and revoke all child tasks
-            # In Celery 5+, chains store results as parent-child relationships
+            # Get child tasks from JobProcess repository using parent_instance_id
+            child_tasks = job_process_repository.get_child_tasks(task_id)
+
+            logger.info(
+                f"Found {len(child_tasks)} child tasks for parent {task_id}",
+                extra={
+                    "context": "cancel_task",
+                    "parent_task_id": task_id,
+                    "child_count": len(child_tasks),
+                },
+            )
+
+            # Revoke each child task in Celery
+            for child_task in child_tasks:
+                if child_task.task_instance_id:
+                    try:
+                        child_result = celery_app.AsyncResult(
+                            child_task.task_instance_id
+                        )
+                        child_result.revoke(terminate=True, signal="SIGKILL")
+                        cancelled_tasks.append(child_task.task_instance_id)
+
+                        logger.info(
+                            f"Revoked child task {child_task.task_name}",
+                            extra={
+                                "context": "cancel_task",
+                                "child_task_id": child_task.task_instance_id,
+                                "child_task_name": child_task.task_name,
+                            },
+                        )
+                    except Exception as revoke_error:
+                        logger.warning(
+                            f"Failed to revoke child task {child_task.task_instance_id}: {str(revoke_error)}",
+                            extra={
+                                "context": "cancel_task",
+                                "child_task_id": child_task.task_instance_id,
+                                "error": str(revoke_error),
+                            },
+                        )
+
+            # Release all child task locks in the repository
+            locks_released = job_process_repository.release_locks_by_parent(task_id)
+
+            # Also try to iterate through Celery chain results (for any tasks not tracked in repo)
             try:
-                # Try to iterate through the chain results
                 current = chain_result
                 while current and not current.ready():
-                    # Revoke the current task
                     current.revoke(terminate=True, signal="SIGKILL")
-                    cancelled_tasks.append(str(current.id))
+                    current_id = str(current.id)
+                    if current_id not in cancelled_tasks:
+                        cancelled_tasks.append(current_id)
 
-                    # Move to the next task in the chain
-                    # In Celery 5+, chains use the result as parent for the next task
                     try:
                         if hasattr(current, "children") and current.children:
                             current = current.children[0]
@@ -553,15 +596,19 @@ async def cancel_task(
                         break
 
             except Exception as chain_error:
-                # If we can't iterate the chain, at least we revoked the main chain task
-                pass
+                logger.warning(
+                    f"Error iterating Celery chain: {str(chain_error)}",
+                    extra={"context": "cancel_task", "error": str(chain_error)},
+                )
 
             return {
                 "status": "cancelled",
-                "message": f"Chain and {len(cancelled_tasks)} task(s) cancelled",
+                "message": f"Chain and {len(cancelled_tasks)} task(s) cancelled, {locks_released} lock(s) released",
                 "task_id": task_id,
                 "is_chain": True,
                 "cancelled_tasks": cancelled_tasks,
+                "child_tasks_from_repo": len(child_tasks),
+                "locks_released": locks_released,
             }
         else:
             # Cancel individual task

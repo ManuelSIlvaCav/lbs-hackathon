@@ -2,6 +2,7 @@
 Company API routes
 """
 
+from typing import Optional
 from fastapi import APIRouter, Query, HTTPException
 from bson import ObjectId
 from urllib.parse import urlparse
@@ -196,6 +197,10 @@ async def get_company(company_id: str):
 async def get_company_job_listings(
     company_id: str,
     force_refresh: bool = Query(False, description="Force refresh from provider"),
+    source_status: Optional[str] = Query(
+        None,
+        description="Filter by source status (enriched, scrapped, active, deactivated)",
+    ),
 ):
     """
     Get job listings for a company
@@ -208,6 +213,7 @@ async def get_company_job_listings(
 
     Query Parameters:
     - force_refresh: Set to true to bypass cache and fetch fresh data from provider
+    - source_status: Filter by source status (enriched, scrapped, active, deactivated)
 
     Returns a list of job postings for the company
     """
@@ -223,6 +229,7 @@ async def get_company_job_listings(
             "context": "company_job_listings",
             "company_id": company_id,
             "force_refresh": force_refresh,
+            "source_status": source_status,
         },
     )
 
@@ -231,10 +238,14 @@ async def get_company_job_listings(
         try:
             logger.info(
                 f"Checking cached job listings",
-                extra={"context": "company_job_listings", "company_id": company_id},
+                extra={
+                    "context": "company_job_listings",
+                    "company_id": company_id,
+                    "source_status": source_status,
+                },
             )
             cached_job_listings = job_listing_repository.get_job_listings_by_company(
-                company_id
+                company_id, source_status=source_status
             )
             if cached_job_listings:
                 logger.info(

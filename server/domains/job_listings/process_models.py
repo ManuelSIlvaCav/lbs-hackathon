@@ -36,6 +36,14 @@ class JobProcessModel(BaseModel):
     task_instance_id: Optional[str] = Field(
         default=None, description="Celery task instance ID for tracking"
     )
+    parent_instance_id: Optional[str] = Field(
+        default=None,
+        description="Parent Celery task instance ID if applicable like chains",
+    )
+    children_instance_ids: Optional[list[str]] = Field(
+        default=None,
+        description="List of child task instance IDs if applicable",
+    )
     status: str = Field(
         default=JobProcessStatus.PROCESSING,
         description="Current status of the process",

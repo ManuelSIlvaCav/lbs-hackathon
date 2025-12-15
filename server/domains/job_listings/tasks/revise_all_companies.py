@@ -9,7 +9,6 @@ from celery import shared_task, chain
 from domains.companies.repository import company_repository
 from domains.job_listings.process_repository import (
     job_process_repository,
-    JobProcessStatus,
 )
 from .revise_company_jobs import revise_company_enriched_jobs
 
@@ -113,7 +112,7 @@ def revise_all_companies_enriched_jobs(self):
             # Add company task signature to chain
             company_tasks.append(
                 revise_company_enriched_jobs.signature(
-                    args=(company_id, company_name),
+                    args=(company_id, company_name, self.request.id),
                     immutable=True,  # Don't pass previous result to next task
                 )
             )
@@ -139,6 +138,7 @@ def revise_all_companies_enriched_jobs(self):
             "total_companies": len(company_ids),
             "tasks_triggered": len(company_tasks),
             "chain_id": result.id if company_tasks else None,
+            "request_task_id": self.request.id,
             "time_taken_seconds": round(elapsed_time, 2),
             "summary_message": f"Started sequential chain of {len(company_tasks)} company processing tasks",
             "note": "Tasks will execute one after another, not in parallel",

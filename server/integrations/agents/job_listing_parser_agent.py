@@ -11,6 +11,7 @@ from domains.job_listings.categories import (
     WORK_ARRANGEMENTS,
     get_all_role_titles,
 )
+from utils.open_ai_singleton import OpenAISingleton
 from utils.web_scraper import scrape_job_description
 from openai.types.shared import Reasoning
 
@@ -127,45 +128,88 @@ Never hallucinate. Never invent degrees, skills, industries, years of experience
 == JOB AVAILABILITY CHECK (CRITICAL - CHECK THIS FIRST) ==
 BEFORE parsing any job details, you MUST check if the job posting explicitly states it is closed or unavailable.
 
-IMPORTANT: Only set result to "no_longer_available" if you find EXPLICIT, UNAMBIGUOUS language that the job is closed. This must be a clear statement about the job status, NOT part of the job description content.
+== STEP 1: LINKEDIN-SPECIFIC CHECK (DO THIS FIRST FOR ALL LINKEDIN JOBS) ==
+CRITICAL: Only apply this check if you can confirm this is actually a LinkedIn job posting.
 
-Look for EXPLICIT closure indicators (these are typically at the TOP of the page or in a banner):
+LinkedIn job indicators (must have at least 2 of these):
+- Text mentions "See who [Company] has hired for this role"
+- Contains "LinkedIn" or "linkedin.com" references
+- Has LinkedIn-specific phrases like "Be among the first X applicants"
+- Contains "Get AI-powered advice on this job" or "Am I a good fit for this job?"
+- Has typical LinkedIn job page structure with company insights
+
+If this IS a LinkedIn job (confirmed by above indicators):
+1. Search the ENTIRE text for the word "Apply" (case-insensitive) 
+2. Search the ENTIRE text for the word "Save" (case-insensitive)
+3. If BOTH "Apply" AND "Save" appear in the text → Job is AVAILABLE, proceed to Step 2
+4. If EITHER "Apply" OR "Save" is MISSING from the text → Job is EXPIRED/UNAVAILABLE
+   - Set result to "no_longer_available"
+   - Set failed_result_error to "no_longer_available"
+   - Still attempt to parse other fields for tracking
+   - DO NOT proceed to normal parsing with result="success"
+
+If this is NOT a LinkedIn job (lacks LinkedIn indicators):
+- Skip this check entirely
+- Proceed directly to Step 2 for general closure indicators
+
+CRITICAL: LinkedIn jobs that are still accepting applications ALWAYS show "Apply" and "Save" buttons near the top of the page text. If these words are absent from a confirmed LinkedIn job, it is definitively closed, regardless of any other content.
+
+Example of AVAILABLE LinkedIn job text:
+"Job Title Company Location Apply Save Use AI to assess... See who Company has hired..."
+→ Has LinkedIn indicators + Contains both "Apply" and "Save" → Available
+
+Example of EXPIRED LinkedIn job text:
+"Job Title Company Location See who Company has hired Use AI to assess..."
+→ Has LinkedIn indicators + Missing "Apply" and "Save" → Expired/Unavailable
+
+Example of NON-LinkedIn job:
+"Back to jobs Senior Engineering Manager New York City Apply [full application form]"
+→ No LinkedIn indicators → Skip LinkedIn check, proceed to Step 2
+
+== STEP 2: GENERAL CLOSURE INDICATORS ==
+For non-LinkedIn jobs OR after confirming LinkedIn job has "Apply" and "Save", check for these closure indicators:
+
+IMPORTANT: Only set result to "no_longer_available" if you find EXPLICIT, UNAMBIGUOUS language that the job is closed.
+
+Look for EXPLICIT closure indicators such as:
 - "This job is closed" or "Job closed"
 - "No longer accepting applications" or "Applications are closed"  
 - "This position has been filled"
 - "Job posting has expired" or "This posting has expired"
 - "This role is no longer available"
 - "We are not accepting new applications for this role"
+- "Sorry, this job is no longer available"
+- "We couldn’t find the job you were looking for"
+- "Job not found" or "404 error"
+- "Job no longer be available"
+- "PAGE NOT FOUND" or similar 404 messages
 - Any other clear system message or status banner indicating the job is closed/unavailable
-- LinkedIn-specific: "No longer accepting applications" banner
-- LinkedIn-specific: Look for the tag html "artdeco-inline-feedback__message" with text indicating closure
-
-These indicators must be SEPARATE from the job description itself - they are status messages about the posting.
+- "We couldn't find what you were looking for" or similar error messages
+- "No longer accepting applications" text
 
 DO NOT flag as unavailable based on:
 - Normal job description content about deadlines, application processes, or requirements
 - Phrases like "apply by [date]" or "deadline" within the job description (these are normal)
 - Mentions of "closing date" or "application deadline" in the job details
-- Vague or indirect language
 - Job requirements or qualifications
 - Standard application instructions like "how to apply"
-- Any text that is part of the actual job description or requirements
-- Company information or "about us" sections
 - Role descriptions or responsibilities
 
-CRITICAL: The closure indicator must be a SYSTEM MESSAGE or STATUS BANNER, not part of the job content itself.
-
-If you find EXPLICIT closure indicators (status banner/system message):
+== STEP 3: IF CLOSURE INDICATORS FOUND ==
+If you find EXPLICIT closure indicators (from Step 2):
 1. Set result to "no_longer_available"
 2. Set failed_result_error to "no_longer_available"
 3. Still attempt to parse other fields if possible for tracking purposes
 
+== STEP 4: DEFAULT BEHAVIOR ==
 If the job posting appears active OR you're unsure OR the only "closure" mentions are within job description content:
 1. Set result to "success"
 2. Set failed_result_error to null
 3. Continue with normal parsing
 
-DEFAULT ASSUMPTION: Assume the job IS available (result="success") unless you find a clear status banner/message. When in doubt, use "success".
+DEFAULT ASSUMPTION: Assume the job IS available (result="success") unless you find a clear status message. When in doubt, use "success".
+
+IMPORTANT REMINDER: For LinkedIn jobs, if "Apply" and "Save" are missing, you MUST set result="no_longer_available" in Step 1. Do not default to "success" for LinkedIn jobs missing these buttons.
 
 WHERE TO LOOK IN THE JD (MANDATORY)
 You must actively search for requirements in all parts of the JD, especially in sections with titles or phrases such as:
@@ -447,14 +491,16 @@ Only extract content that describes what the candidate must or should have.
 
 == OUTPUT FORMAT ==
 == FINAL INSTRUCTION ==
-1. FIRST: Check if the job posting EXPLICITLY states it is closed/unavailable. Be CONSERVATIVE - only flag as unavailable if CERTAIN. Set result and failed_result_error accordingly.
-2. Read the JD. Actively search for requirement content in all relevant sections (including "Requirements", "Minimum qualifications", "Preferred qualifications", "You may be a good fit if you have", etc.).
-3. Classify every requirement precisely into minimum or preferred using the sentence level wording.
-4. Encode any OR logic using the [orX] tagging convention inside list values.
-5. Fill every field of the JSON strictly according to the schema and rules above.
-6. Ensure the result field is populated ("success" or "no_longer_available") and failed_result_error is set appropriately (null for success, or the specific error type).
-7. When in doubt about availability, default to result="success" with failed_result_error=null.
-8. Output only the final JSON object and nothing else.
+1. FIRST: Check if this is a LinkedIn job (look for LinkedIn-specific indicators). If confirmed LinkedIn AND missing "Apply" or "Save", set result="no_longer_available" immediately.
+2. Read the JD. Actively search for requirement content in all relevant sections (including "Requirements", "Minimum qualifications", "Preferred qualifications", "You may be a good fit if you have", etc.). 
+3. Check if the job posting EXPLICITLY states it is closed/unavailable. Be CONSERVATIVE - only flag as unavailable if CERTAIN. Set result and failed_result_error accordingly.
+4. Classify every requirement precisely into minimum or preferred using the sentence level wording.
+5. Encode any OR logic using the [orX] tagging convention inside list values.
+6. Fill every field of the JSON strictly according to the schema and rules above.
+7. Ensure the result field is populated ("success" or "no_longer_available") and failed_result_error is set appropriately (null for success, or the specific error type).
+8. CRITICAL: Only apply the LinkedIn "Apply/Save" check to jobs that have clear LinkedIn indicators. Do not flag non-LinkedIn jobs as unavailable just because they lack "Save".
+9. When in doubt about availability (non-LinkedIn jobs or unclear status), default to result="success" with failed_result_error=null.
+10. Output only the final JSON object and nothing else.
 """
 
 agent_job_categorization = Agent(
@@ -471,6 +517,7 @@ agent_job_categorization = Agent(
 
 class JobCategorizationInput(BaseModel):
     job_url: str
+    job_id: Optional[str] = None
 
 
 async def run_agent_job_categorization(
@@ -500,6 +547,16 @@ async def run_agent_job_categorization(
             )
             return None
 
+        if job_text == "PAGE_NOT_FOUND":
+            logger.info(
+                "Job page not found or redirected",
+                extra={
+                    "context": "job_listing_parsing",
+                    "job_url": categorization_input.job_url,
+                },
+            )
+            return None
+
         # Step 2: Send the scraped text to the AI agent for parsing
         result = await Runner.run(
             agent_job_categorization,
@@ -518,6 +575,8 @@ async def run_agent_job_categorization(
 
         usage = result.context_wrapper.usage
 
+        rate_limit_info = OpenAISingleton.get_rate_limits()
+
         logger.info(
             "Successfully parsed job listing",
             extra={
@@ -526,6 +585,12 @@ async def run_agent_job_categorization(
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
                 "total_tokens": usage.total_tokens,
+                "rate_limit_info": rate_limit_info,
+                "job_id": (
+                    categorization_input.job_id
+                    if categorization_input.job_id
+                    else "On creation"
+                ),
             },
         )
         return result.final_output

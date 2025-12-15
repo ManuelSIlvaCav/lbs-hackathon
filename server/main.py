@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from logger import load_logger
+from utils import open_ai_singleton
 
 
 # Load environment variables
@@ -18,10 +19,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import db_manager
 from domains.candidates.routes import router as candidates_router
 from domains.job_listings.routes import router as job_listings_router
-from domains.applications.routes import router as applications_router
 from domains.companies.routes import router as companies_router
 from domains.auth.routes import router as auth_router
-from routes.automation import router as automation_router
 from migrations.migrate_company_id_to_objectid import migrate_company_id_to_objectid
 
 
@@ -46,6 +45,9 @@ app = FastAPI(
 )
 
 
+intantiate_openai = open_ai_singleton.OpenAISingleton()
+
+
 origins = ["http://localhost:3000", "http://localhost:3001", "*"]
 
 # CORS middleware configuration
@@ -61,9 +63,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(candidates_router)
 app.include_router(job_listings_router)
-app.include_router(applications_router)
 app.include_router(companies_router)
-app.include_router(automation_router)
 
 
 @app.get("/")

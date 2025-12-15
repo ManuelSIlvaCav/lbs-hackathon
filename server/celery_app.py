@@ -10,6 +10,12 @@ from celery import Celery
 from dotenv import load_dotenv
 from logger import load_logger
 
+# Optional: Define periodic tasks (Celery Beat)
+from celery.schedules import crontab
+
+from utils import open_ai_singleton
+
+
 # Add the current directory to Python path to ensure modules can be imported
 # This is especially important for Celery workers
 current_dir = Path(__file__).parent
@@ -79,9 +85,6 @@ celery_app.autodiscover_tasks(
     ]
 )
 
-# Optional: Define periodic tasks (Celery Beat)
-from celery.schedules import crontab
-
 celery_app.conf.beat_schedule = {
     # Refresh job listings for followed companies daily at 5 AM London time
     # Uncomment to enable scheduled execution
@@ -105,6 +108,9 @@ celery_app.conf.beat_schedule = {
     #     "schedule": 5 * 60,  # Every 5 minutes
     # },
 }
+
+
+intantiate_openai = open_ai_singleton.OpenAISingleton()
 
 
 @celery_app.task(bind=True)

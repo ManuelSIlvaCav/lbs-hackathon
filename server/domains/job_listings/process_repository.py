@@ -40,8 +40,17 @@ class JobProcessRepository:
             name="completed_at_ttl",
         )
 
+        self.collection.create_index(
+            "parent_instance_id",
+            name="parent_instance_id_index",
+            sparse=True,
+        )
+
     def acquire_lock(
-        self, task_name: str, task_instance_id: Optional[str] = None
+        self,
+        task_name: str,
+        task_instance_id: Optional[str] = None,
+        parent_instance_id: Optional[str] = None,
     ) -> Optional[JobProcessModel]:
         """
         Attempt to acquire a processing lock for a task
@@ -57,6 +66,7 @@ class JobProcessRepository:
             process_data = {
                 "task_name": task_name,
                 "task_instance_id": task_instance_id,
+                "parent_instance_id": parent_instance_id,
                 "status": JobProcessStatus.PROCESSING,
                 "started_at": datetime.now(),
                 "retry_count": 0,
@@ -184,6 +194,73 @@ class JobProcessRepository:
                 },
             )
             return None
+
+    def get_child_tasks(self, parent_instance_id: str) -> list[JobProcessModel]:
+        """
+        Get all child tasks for a given parent instance ID
+
+        Args:
+            parent_instance_id: The parent task instance ID
+
+        Returns:
+            List of JobProcessModel objects
+        """
+        try:
+            processes = self.collection.find({"parent_instance_id": parent_instance_id})
+
+            return [JobProcessModel(**process) for process in processes]
+
+        except Exception as e:
+            logger.error(
+                f"Error getting child tasks: {str(e)}",
+                extra={
+                    "context": "get_child_tasks",
+                    "parent_instance_id": parent_instance_id,
+                    "error": str(e),
+                },
+            )
+            return []
+
+    def release_locks_by_parent(self, parent_instance_id: str) -> int:
+        """
+        Release all locks for tasks with a given parent instance ID
+
+        Args:
+            parent_instance_id: The parent task instance ID
+
+        Returns:
+            Number of locks released
+        """
+        try:
+            result = self.collection.delete_many(
+                {
+                    "parent_instance_id": parent_instance_id,
+                    "status": JobProcessStatus.PROCESSING,
+                }
+            )
+
+            if result.deleted_count > 0:
+                logger.info(
+                    f"Released {result.deleted_count} child task locks for parent {parent_instance_id}",
+                    extra={
+                        "context": "release_locks_by_parent",
+                        "parent_instance_id": parent_instance_id,
+                        "count": result.deleted_count,
+                    },
+                )
+
+            return result.deleted_count
+
+        except Exception as e:
+            logger.error(
+                f"Error releasing child task locks: {str(e)}",
+                extra={
+                    "context": "release_locks_by_parent",
+                    "parent_instance_id": parent_instance_id,
+                    "error": str(e),
+                },
+            )
+            return 0
 
     def cleanup_stale_locks(self, hours: int = 2) -> int:
         """
