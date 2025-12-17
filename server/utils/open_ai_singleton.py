@@ -67,7 +67,7 @@ class OpenAISingleton:
             should_update = True
 
             if should_update:
-                print("🔄 Updating OpenAI rate limit info from response headers.")
+
                 cls.rate_limits["limit-requests"] = headers.get(
                     "x-ratelimit-limit-requests"
                 )
@@ -92,6 +92,7 @@ class OpenAISingleton:
         Parse OpenAI's reset time format to seconds from stored rate limits.
 
         Formats:
+        - "229ms" -> 0 seconds (rounds down)
         - "24.555s" -> 24 seconds
         - "6m0s" -> 360 seconds
         - "1m30.5s" -> 90 seconds
@@ -107,8 +108,13 @@ class OpenAISingleton:
         try:
             total_seconds = 0
 
+            # Check for milliseconds first (must come before minutes check)
+            if "ms" in reset_time_str:
+                # Format: "229ms"
+                ms_part = reset_time_str.rstrip("ms")
+                total_seconds = float(ms_part) / 1000
             # Check if it contains minutes
-            if "m" in reset_time_str:
+            elif "m" in reset_time_str:
                 # Format: "6m0s" or "1m30.5s"
                 parts = reset_time_str.split("m")
                 if len(parts) == 2:

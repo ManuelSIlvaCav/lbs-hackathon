@@ -65,10 +65,8 @@ class DataProcessorRepository:
         self, enrichment_data: CompanyJobEnrichmentCreate
     ) -> CompanyJobEnrichmentResponse:
         """Save job enrichment data for a company"""
-        now = datetime.now()
 
         enrichment_dict = enrichment_data.model_dump()
-        enrichment_dict["enriched_at"] = now
 
         result = self.job_enrichments_collection.insert_one(enrichment_dict)
 
@@ -77,7 +75,6 @@ class DataProcessorRepository:
             company_id=enrichment_data.company_id,
             provider=enrichment_data.provider,
             job_count=enrichment_data.job_count,
-            enriched_at=now,
         )
 
     def get_latest_job_enrichment(
@@ -86,7 +83,7 @@ class DataProcessorRepository:
         """Get the latest job enrichment data for a company"""
         doc = self.job_enrichments_collection.find_one(
             {"company_id": company_id, "provider": provider},
-            sort=[("enriched_at", -1)],
+            sort=[("enriched_at", -1), ("updated_at", -1)],
         )
         return doc
 

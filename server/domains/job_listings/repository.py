@@ -8,7 +8,7 @@ import time
 from typing import List, Optional
 from datetime import datetime
 from bson import ObjectId
-from pymongo import ASCENDING
+from pymongo import ASCENDING, DESCENDING, UpdateOne, InsertOne, UpdateMany
 from pymongo.collection import Collection
 from pymongo.results import InsertOneResult, UpdateResult, DeleteResult
 from urllib.parse import urlparse
@@ -22,7 +22,7 @@ from .models import (
 )
 from .source_repository import job_listing_source_repository
 from database import get_collection
-from integrations.agents.job_listing_parser_agent import (
+from integrations.agents.job_listing_parser import (
     AgentJobCategorizationSchema,
     JobCategorizationInput,
     run_agent_job_categorization,
@@ -87,6 +87,7 @@ class JobListingRepository:
         self.collection.create_index([("origin", ASCENDING)])
         self.collection.create_index("url")  # Index for URL-based lookups
         self.collection.create_index("source_status")  # Index for status filtering
+        self.collection.create_index([("updated_at", DESCENDING)])
 
     async def create_job_listing(self, job_data: JobListingCreate) -> JobListingModel:
         """
@@ -767,7 +768,7 @@ class JobListingRepository:
         job_listings: List[JobListingCreate],
     ) -> tuple[List[str], List[str], int]:
         """
-        Upsert multiple job listings in bulk with smart update logic:
+        Upsert multiple job listings in bulk with smart update logic using bulk_write:
         - New jobs (by URL): Insert
         - Existing jobs (by URL): Update last_seen_at and posted_at
         - Missing jobs: Mark as expired (not in current response)
@@ -796,28 +797,30 @@ class JobListingRepository:
         )
         existing_jobs_map = {job["url"]: job for job in existing_jobs}
 
-        inserted_ids = []
-        updated_ids = []
+        # Collect all operations to execute in bulk
+        bulk_operations = []
+        inserted_ids = []  # Pre-track IDs for inserts
+        updated_ids = []  # Pre-track IDs for updates
 
         # Process each job listing from provider
         for job_data in job_listings:
             if not job_data.url:
                 continue
 
-            # Extract origin fields
             existing_job = existing_jobs_map.get(job_data.url)
 
             if existing_job:
-                # UPDATE: Job already exists, update timestamps
+                # UPDATE: Build update operation for existing job
                 update_fields = {
-                    "last_seen_at": datetime.now(),
                     "updated_at": datetime.now(),
-                    "status": "active",  # Reactivate if it was expired
                 }
 
                 # Update posted_at if provided and different
                 if job_data.posted_at:
                     update_fields["posted_at"] = job_data.posted_at
+
+                if job_data.last_seen_at:
+                    update_fields["last_seen_at"] = job_data.last_seen_at
 
                 # Update other fields if they've changed
                 if job_data.title and job_data.title != existing_job.get("title"):
@@ -833,17 +836,18 @@ class JobListingRepository:
                 if job_data.country:
                     update_fields["country"] = job_data.country
 
-                result = self.collection.update_one(
-                    {"_id": existing_job["_id"]}, {"$set": update_fields}
+                # Create UpdateOne operation
+                bulk_operations.append(
+                    UpdateOne({"_id": existing_job["_id"]}, {"$set": update_fields})
                 )
-
-                if result.modified_count > 0:
-                    updated_ids.append(str(existing_job["_id"]))
+                # Track this ID for the results
+                updated_ids.append(str(existing_job["_id"]))
 
             else:
+                # INSERT: Build insert operation for new job
                 origin_domain = extract_domain(job_data.url)
                 origin = determine_origin(origin_domain)
-                # INSERT: New job listing
+
                 job_dict = job_data.model_dump()
                 # Convert company_id to ObjectId
                 job_dict["company_id"] = (
@@ -852,15 +856,23 @@ class JobListingRepository:
                 job_dict["created_at"] = datetime.now()
                 job_dict["updated_at"] = datetime.now()
                 job_dict["last_seen_at"] = datetime.now()
-                job_dict["status"] = "active"
                 job_dict["origin_domain"] = origin_domain
                 job_dict["origin"] = origin
 
-                result = self.collection.insert_one(job_dict)
-                inserted_ids.append(str(result.inserted_id))
+                # Pre-generate ObjectId to track inserted IDs
+                new_id = ObjectId()
+                job_dict["_id"] = new_id
+                inserted_ids.append(str(new_id))
 
-        # EXPIRE: Mark jobs not in current response as expired
-        # Only expire jobs that are currently active
+                # Create InsertOne operation with pre-assigned _id
+                bulk_operations.append(InsertOne(job_dict))
+
+        # Execute all operations in a single bulk_write
+        if bulk_operations:
+            self.collection.bulk_write(bulk_operations, ordered=False)
+
+        # Execute expire operation separately to get accurate count
+        # (bulk_write doesn't provide per-operation modified counts)
         expired_result = self.collection.update_many(
             {
                 "company_id": company_oid,
@@ -869,7 +881,6 @@ class JobListingRepository:
             },
             {"$set": {"status": "expired", "updated_at": datetime.now()}},
         )
-
         expired_count = expired_result.modified_count
 
         return inserted_ids, updated_ids, expired_count
@@ -964,7 +975,7 @@ class JobListingRepository:
                 pipeline.append({"$match": match_stage})
 
             # Add sort stage (most recent first)
-            pipeline.append({"$sort": {"created_at": -1}})
+            pipeline.append({"$sort": {"updated_at": -1}})
 
             # Add $lookup stage to join company information
             pipeline.append(

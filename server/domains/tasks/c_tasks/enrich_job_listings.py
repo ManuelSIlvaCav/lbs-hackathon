@@ -12,7 +12,7 @@ from .enrich_company_job_listings import enrich_company_job_listings
 logger = logging.getLogger("app")
 
 
-@shared_task(name="domains.companies.tasks.enrich_job_listings")
+@shared_task(name="domains.tasks.c_tasks.enrich_job_listings")
 def enrich_job_listings():
     """
     Enrich job listings for all companies that are followed by at least one candidate.

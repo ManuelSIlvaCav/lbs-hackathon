@@ -152,7 +152,6 @@ export function JobListingDetailsDialog({
                   label="Work Arrangement"
                   value={job.work_arrangement}
                 />
-                <InfoRow label="Status" value={job.status} />
                 <InfoRow label="Listing Status" value={job.listing_status} />
                 <InfoRow label="Source Status" value={job.source_status} />
                 <ArrayRow

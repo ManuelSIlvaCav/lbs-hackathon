@@ -23,7 +23,7 @@ BATCH_SIZE = int(os.getenv("REVISE_BATCH_SIZE", "15"))
 
 
 @shared_task(
-    name="domains.job_listings.tasks.revise_company_enriched_jobs",
+    name="domains.tasks.c_tasks.revise_company_enriched_jobs",
     bind=True,
     max_retries=3,
 )
@@ -42,6 +42,7 @@ def revise_company_enriched_jobs(
     Args:
         company_id: String representation of company ObjectId
         company_name: Name of the company (for logging)
+        parent_instance_id: Optional parent task ID for chain tracking
 
     Returns:
         dict: Summary of revision results for this company
@@ -144,8 +145,6 @@ def revise_company_enriched_jobs(
                 },
             )
 
-            # Check rate limits after batch
-
             # Process batch concurrently
             batch_results = asyncio.run(_revise_batch(batch, company_name))
 
@@ -168,7 +167,7 @@ def revise_company_enriched_jobs(
             "jobs_updated": total_jobs_updated,
             "jobs_deactivated": total_jobs_deactivated,
             "jobs_failed": total_jobs_failed,
-            "elapsed_time": round(elapsed_time, 2),
+            "time_taken_seconds": round(elapsed_time, 2),
         }
 
         logger.info(

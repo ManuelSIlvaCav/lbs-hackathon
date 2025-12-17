@@ -236,6 +236,7 @@ PROFILE_CATEGORIES: Dict[str, List[str]] = {
         "Computer Programmer",
         "Computer Systems Administrator",
         "Engineer Manager",
+        "Staff Engineer",
     ],
     "Accounting & Finance": [
         "Accountant",

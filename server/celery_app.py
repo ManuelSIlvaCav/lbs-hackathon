@@ -111,10 +111,4 @@ celery_app.conf.beat_schedule = {
 
 
 intantiate_openai = open_ai_singleton.OpenAISingleton()
-
-
-@celery_app.task(bind=True)
-def debug_task(self):
-    """Debug task to test Celery is working"""
-    print(f"Request: {self.request!r}")
-    return "Celery is working!"
+logger.info("Celery app initialized", extra={"context": "celery_app"})

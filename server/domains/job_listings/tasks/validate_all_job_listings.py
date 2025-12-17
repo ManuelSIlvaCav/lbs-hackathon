@@ -15,10 +15,8 @@ from .revise_company_jobs import revise_company_enriched_jobs
 logger = logging.getLogger("app")
 
 
-@shared_task(
-    name="domains.job_listings.tasks.revise_all_companies_enriched_jobs", bind=True
-)
-def revise_all_companies_enriched_jobs(self):
+@shared_task(name="domains.job_listings.tasks.validate_all_job_listings", bind=True)
+def validate_all_job_listings(self):
     """
     Coordinator task to trigger revision for all followed companies
 
@@ -31,7 +29,7 @@ def revise_all_companies_enriched_jobs(self):
     Returns:
         dict: Summary of triggered tasks
     """
-    task_name = "revise_all_companies_enriched_jobs"
+    task_name = "validate_all_job_listings"
 
     # Try to acquire coordinator lock
     lock = job_process_repository.acquire_lock(task_name, self.request.id)
@@ -39,7 +37,7 @@ def revise_all_companies_enriched_jobs(self):
     if not lock:
         logger.warning(
             "Coordinator task already running, skipping execution",
-            extra={"context": "revise_all_companies_enriched_jobs"},
+            extra={"context": "validate_all_job_listings"},
         )
         return {
             "status": "skipped",
@@ -50,7 +48,7 @@ def revise_all_companies_enriched_jobs(self):
         logger.info(
             "Starting coordinator task to revise all companies",
             extra={
-                "context": "revise_all_companies_enriched_jobs",
+                "context": "validate_all_job_listings",
                 "task_id": self.request.id,
             },
         )
@@ -61,7 +59,7 @@ def revise_all_companies_enriched_jobs(self):
             logger.info(
                 "Cleaned up stale locks before starting",
                 extra={
-                    "context": "revise_all_companies_enriched_jobs",
+                    "context": "validate_all_job_listings",
                     "stale_locks_cleaned": stale_locks_cleaned,
                 },
             )
@@ -72,7 +70,7 @@ def revise_all_companies_enriched_jobs(self):
         if not company_ids:
             logger.info(
                 "No followed companies found",
-                extra={"context": "revise_all_companies_enriched_jobs"},
+                extra={"context": "validate_all_job_listings"},
             )
             job_process_repository.release_lock(task_name)
             return {
@@ -84,7 +82,7 @@ def revise_all_companies_enriched_jobs(self):
         logger.info(
             f"Found {len(company_ids)} companies to process",
             extra={
-                "context": "revise_all_companies_enriched_jobs",
+                "context": "validate_all_job_listings",
                 "total_companies": len(company_ids),
             },
         )
@@ -103,7 +101,7 @@ def revise_all_companies_enriched_jobs(self):
             logger.info(
                 f"Adding company to sequential chain: {company_name}",
                 extra={
-                    "context": "revise_all_companies_enriched_jobs",
+                    "context": "validate_all_job_listings",
                     "company_id": company_id,
                     "company_name": company_name,
                 },
@@ -127,7 +125,7 @@ def revise_all_companies_enriched_jobs(self):
             logger.info(
                 f"Started sequential chain of company tasks",
                 extra={
-                    "context": "revise_all_companies_enriched_jobs",
+                    "context": "validate_all_job_listings",
                     "chain_id": result.id,
                     "total_tasks": len(company_tasks),
                 },
@@ -147,7 +145,7 @@ def revise_all_companies_enriched_jobs(self):
         logger.info(
             "Completed triggering all company tasks",
             extra={
-                "context": "revise_all_companies_enriched_jobs",
+                "context": "validate_all_job_listings",
                 **summary,
             },
         )
@@ -160,7 +158,7 @@ def revise_all_companies_enriched_jobs(self):
         logger.error(
             f"Error in coordinator task",
             extra={
-                "context": "revise_all_companies_enriched_jobs",
+                "context": "validate_all_job_listings",
                 "error_msg": str(e),
             },
         )

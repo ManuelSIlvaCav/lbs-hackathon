@@ -8,7 +8,7 @@ from pydantic import BaseModel, BeforeValidator, Field, ConfigDict
 from bson import ObjectId
 from enum import Enum
 
-from integrations.agents.job_listing_parser_agent import AgentJobCategorizationSchema
+from integrations.agents.job_listing_parser import AgentJobCategorizationSchema
 
 
 # Custom type for MongoDB ObjectId
@@ -52,7 +52,6 @@ class JobListingOrigin(str, Enum):
     LINKEDIN = "linkedin"
     CAREERS = "careers"
     GREENHOUSE = "greenhouse"
-    WORKDAY = "workday"
 
 
 class JobListingStatus(str, Enum):
@@ -96,7 +95,6 @@ class JobListingModel(BaseModel):
     last_seen_at: Optional[datetime] = Field(
         default=None, description="When the job was last seen"
     )
-    status: str = Field(default="active", description="Status of the job listing")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     origin: Optional[JobListingOrigin] = Field(
@@ -166,6 +164,10 @@ class JobListingCreate(BaseModel):
     last_seen_at: Optional[datetime] = Field(
         default=None, description="When the job was last seen"
     )
+    source_status: Optional[JobListingSourceStatus] = Field(
+        default=JobListingSourceStatus.SCRAPPED,
+        description="Status of the job listing source (e.g., enriched, scrapped)",
+    )
 
 
 class JobListingUpdate(BaseModel):
@@ -178,7 +180,6 @@ class JobListingUpdate(BaseModel):
     company: Optional[str] = Field(default=None, description="Company name")
     location: Optional[str] = Field(default=None, description="Job location")
     description: Optional[str] = Field(default=None, description="Job description")
-    status: Optional[str] = Field(default=None, description="Status of the job listing")
 
 
 class PaginatedJobListingResponse(BaseModel):

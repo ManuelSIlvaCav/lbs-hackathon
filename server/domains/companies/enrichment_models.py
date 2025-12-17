@@ -70,6 +70,8 @@ class CompanyJobEnrichmentData(BaseModel):
     raw_data: Dict[str, Any]  # Full job listings response
     job_count: int = 0  # Number of jobs found
     enriched_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
 
     class Config:
         populate_by_name = True
@@ -93,7 +95,9 @@ class CompanyJobEnrichmentResponse(BaseModel):
     company_id: str
     provider: str
     job_count: int
-    enriched_at: datetime
+    enriched_at: Optional[datetime] = Field(
+        default=None, description="When the job was last enriched"
+    )
 
     class Config:
         json_encoders = {datetime: lambda v: v.isoformat()}

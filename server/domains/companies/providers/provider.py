@@ -39,4 +39,6 @@ def provider_get_job_listings(
     Returns:
         List of JobListing objects in our standard format
     """
-    return context.get_job_listings(company_id, provider_company_id)
+    # Change force_refresh to False to use cached data if available
+    # This will check for the latest job enrichment data before fetching new data and using credits
+    return context.get_job_listings(company_id, provider_company_id, force_refresh=True)

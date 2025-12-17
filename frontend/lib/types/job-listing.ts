@@ -77,7 +77,6 @@ export interface JobListing {
   posted_at?: string | null;
   last_seen_at?: string | null;
   metadata?: JobListingMetadata | null;
-  status?: string;
   created_at?: string;
   updated_at?: string | null;
   origin?: "linkedin" | "greenhouse" | "workday" | "careers" | "other";
@@ -115,7 +114,6 @@ export interface JobListingUpdate {
   location?: string;
   description?: string;
   metadata?: JobListingMetadata;
-  status?: string;
 }
 
 export interface PaginatedJobListingResponse {

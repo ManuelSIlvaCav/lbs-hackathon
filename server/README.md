@@ -40,6 +40,7 @@ https://app.apollo.io
 # Costs on OpenAI
 
 https://platform.openai.com/docs/pricing
+https://platform.openai.com/settings/organization/limits
 
 Each Job Listing
 Input 10k
@@ -65,6 +66,8 @@ Per 10k job listings
 
 # Open AI gpt-5-nano
 
+200k Token Per Minute
+
 Input:
 $0.050 / 1M tokens
 Cached input:
@@ -80,6 +83,8 @@ Per 10k Job Listing
 13 USD Per 10k Job Listings
 
 # Open AI gpt-5-mini
+
+500k Tokens Per Minute
 
 Input:
 $0.25 / 1M tokens

@@ -49,10 +49,12 @@ class JobListingSourceModel(BaseModel):
     )
 
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    job_listing_id: str = Field(
-        ..., description="Reference to the main job_listing document"
+    job_listing_id: PyObjectId = Field(
+        ..., description="Reference to the main job_listing document (ObjectId)"
     )
-    company_id: str = Field(..., description="Reference to the company document")
+    company_id: PyObjectId = Field(
+        ..., description="Reference to the company document (ObjectId)"
+    )
     sources: JobListingSourceFieldModel = Field(
         default_factory=JobListingSourceFieldModel,
         description="Sources information for the job listing",
@@ -64,8 +66,8 @@ class JobListingSourceModel(BaseModel):
 class JobListingSourceCreate(BaseModel):
     """Model for creating a job listing source tracking document"""
 
-    job_listing_id: str
-    company_id: str
+    job_listing_id: PyObjectId
+    company_id: PyObjectId
     sources: JobListingSourceFieldModel = Field(
         default_factory=JobListingSourceFieldModel,
     )
@@ -86,8 +88,8 @@ class JobListingSourceResponse(BaseModel):
     )
 
     id: str = Field(alias="_id")
-    job_listing_id: str
-    company_id: str
+    job_listing_id: PyObjectId
+    company_id: PyObjectId
     sources: JobListingSourceFieldModel
     created_at: datetime
     updated_at: datetime

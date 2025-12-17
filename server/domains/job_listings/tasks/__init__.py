@@ -1,13 +1,16 @@
 """
 Job listing tasks module
+
+This module has been moved to domains.tasks.c_tasks
+All tasks are now located in the centralized tasks domain.
 """
 
-from .revise_company_jobs import revise_company_enriched_jobs
-from .revise_all_companies import revise_all_companies_enriched_jobs
-from .cleanup_stale_processes import cleanup_stale_job_processes
+# Tasks have been moved to domains.tasks.c_tasks
+# Import from there instead:
+# from domains.tasks.c_tasks import (
+#     revise_company_enriched_jobs,
+#     validate_all_job_listings,
+#     cleanup_stale_job_processes,
+# )
 
-__all__ = [
-    "revise_company_enriched_jobs",
-    "revise_all_companies_enriched_jobs",
-    "cleanup_stale_job_processes",
-]
+__all__ = []
