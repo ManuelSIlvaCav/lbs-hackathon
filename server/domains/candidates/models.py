@@ -83,9 +83,13 @@ class SearchPreferences(BaseModel):
     minimum_salary: Optional[int] = Field(
         default=None, description="Minimum salary requirement"
     )
-    role_priorities: Optional[List[str]] = Field(
+    profile_categories: Optional[List[str]] = Field(
         default=None,
-        description="Priority aspects (e.g., 'Work-life balance', 'Learning', 'Impact')",
+        description="Preferred job profile categories",
+    )
+    role_titles: Optional[List[str]] = Field(
+        default=None,
+        description="Specific role titles of interest",
     )
 
     # Industry and technology preferences

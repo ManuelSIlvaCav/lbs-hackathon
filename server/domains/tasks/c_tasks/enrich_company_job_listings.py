@@ -5,6 +5,7 @@ Task for enriching job listings for a single company
 import time
 from bson import ObjectId
 from celery import shared_task
+from celery.exceptions import SoftTimeLimitExceeded
 from datetime import datetime
 import asyncio
 import logging
@@ -19,7 +20,11 @@ logger = logging.getLogger("app")
 BATCH_SIZE = 15  # Process 15 job listings at a time
 
 
-@shared_task(name="domains.tasks.c_tasks.enrich_company_job_listings")
+@shared_task(
+    name="domains.tasks.c_tasks.enrich_company_job_listings",
+    soft_time_limit=3600,
+    time_limit=4500,
+)
 def enrich_company_job_listings(company_id: str):
     """
     Enrich job listings for a single company.
@@ -167,6 +172,23 @@ def enrich_company_job_listings(company_id: str):
         }
 
         return summary
+
+    except SoftTimeLimitExceeded as t:
+        logger.error(
+            "Task time limit exceeded in enrich_company_job_listings",
+            extra={
+                "context": "enrich_company_job_listings",
+                "company_id": company_id,
+                "error_msg": str(t),
+            },
+            exc_info=True,
+        )
+        return {
+            "status": "failed",
+            "company_id": company_id,
+            "error": "Task time limit exceeded",
+            "failed_at": datetime.now().isoformat(),
+        }
 
     except Exception as e:
         logger.error(

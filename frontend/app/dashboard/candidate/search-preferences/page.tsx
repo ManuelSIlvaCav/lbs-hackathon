@@ -4,18 +4,12 @@ import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useCandidateContext } from "@/contexts/candidate-context";
 import { useEffect, useState } from "react";
-import { CompanyStep } from "./_components/company-step";
-import { IndustriesStep } from "./_components/industries-step";
 import { LocationStep } from "./_components/location-step";
 import { RoleStep } from "./_components/role-step";
-import { TechnologiesStep } from "./_components/technologies-step";
 
 const STEPS = [
   { id: "location", title: "Location", component: LocationStep },
   { id: "role", title: "Role", component: RoleStep },
-  { id: "industries", title: "Industries", component: IndustriesStep },
-  { id: "technologies", title: "Technologies", component: TechnologiesStep },
-  { id: "company", title: "Company", component: CompanyStep },
 ];
 
 export default function SearchPreferencesPage() {
@@ -42,18 +36,9 @@ export default function SearchPreferencesPage() {
         role_type: candidate.search_preferences.role_type || [],
         role_level: candidate.search_preferences.role_level || [],
         minimum_salary: candidate.search_preferences.minimum_salary || null,
-        role_priorities: candidate.search_preferences.role_priorities || [],
-        favourite_industries:
-          candidate.search_preferences.favourite_industries || [],
-        hidden_industries: candidate.search_preferences.hidden_industries || [],
-        favourite_technologies:
-          candidate.search_preferences.favourite_technologies || [],
-        hidden_technologies:
-          candidate.search_preferences.hidden_technologies || [],
-        company_size: candidate.search_preferences.company_size || [],
-        followed_companies:
-          candidate.search_preferences.followed_companies || [],
-        hidden_companies: candidate.search_preferences.hidden_companies || [],
+        profile_categories:
+          candidate.search_preferences.profile_categories || [],
+        role_titles: candidate.search_preferences.role_titles || [],
       });
     }
   }, [candidate]);

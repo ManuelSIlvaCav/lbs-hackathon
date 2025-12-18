@@ -138,7 +138,7 @@ def refresh_companies_job_listings():
                 )
 
                 logger.info(
-                    f"Successfully refreshed {len(job_listings)} job listings for {company.name}",
+                    f"Successfully refreshed job listings",
                     extra={
                         "context": "refresh_companies_job_listings",
                         "company_id": company_id_str,

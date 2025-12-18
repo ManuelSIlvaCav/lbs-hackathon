@@ -83,11 +83,14 @@ class JobListingRepository:
         self.collection: Collection = get_collection("job_listings")
         # Create indexes for job listings
         self.collection.create_index("company_id")
-        self.collection.create_index("last_seen_at")
+        self.collection.create_index([("last_seen_at", DESCENDING), ("source_status")])
         self.collection.create_index([("origin", ASCENDING)])
         self.collection.create_index("url")  # Index for URL-based lookups
         self.collection.create_index("source_status")  # Index for status filtering
         self.collection.create_index([("updated_at", DESCENDING)])
+        self.collection.create_index(
+            [("profile_categories", 1), ("source_status", 1), ("last_seen_at", -1)],
+        )
 
     async def create_job_listing(self, job_data: JobListingCreate) -> JobListingModel:
         """

@@ -81,6 +81,7 @@ celery_app.autodiscover_tasks(
         "domains.job_listings",
         "domains.companies",
         "domains.auth",
+        "domains.tasks.c_tasks",  # Centralized tasks location
         # Add more domains here as needed
     ]
 )
@@ -98,7 +99,7 @@ celery_app.conf.beat_schedule = {
     # Runs after refresh task to enrich newly fetched listings
     # Uncomment to enable scheduled execution
     # "enrich-followed-companies-job-listings": {
-    #     "task": "domains.companies.tasks.enrich_job_listings",
+    #     "task": "domains.companies.tasks.enrich_all_job_listings",
     #     "schedule": crontab(hour=6, minute=0),  # 6:00 AM UTC (London time in winter)
     #     # Note: For British Summer Time (UTC+1), use hour=5 instead
     #     # Or set timezone="Europe/London" and use hour=6

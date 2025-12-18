@@ -46,7 +46,12 @@ const jobsItems = [
   {
     title: "Job Listings",
     icon: Briefcase,
-    url: "/dashboard/job-listings",
+    url: "/dashboard/jobs/listings",
+  },
+  {
+    title: "Recommendations",
+    icon: Search,
+    url: "/dashboard/jobs/recommendations",
   },
 ];
 

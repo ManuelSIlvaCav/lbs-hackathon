@@ -12,8 +12,8 @@ from .enrich_company_job_listings import enrich_company_job_listings
 logger = logging.getLogger("app")
 
 
-@shared_task(name="domains.tasks.c_tasks.enrich_job_listings")
-def enrich_job_listings():
+@shared_task(name="domains.tasks.c_tasks.enrich_all_job_listings")
+def enrich_all_job_listings():
     """
     Enrich job listings for all companies that are followed by at least one candidate.
 
@@ -26,9 +26,9 @@ def enrich_job_listings():
         dict: Summary of the enrichment operation including success/failure counts
     """
     logger.info(
-        "Starting enrich_job_listings task",
+        "Starting enrich_all_job_listings task",
         extra={
-            "context": "enrich_job_listings",
+            "context": "enrich_all_job_listings",
         },
     )
 
@@ -58,7 +58,7 @@ def enrich_job_listings():
                 logger.info(
                     "Processing company",
                     extra={
-                        "context": "enrich_job_listings",
+                        "context": "enrich_all_job_listings",
                         "company_id": company_id_str,
                     },
                 )
@@ -95,7 +95,7 @@ def enrich_job_listings():
                 logger.error(
                     f"Failed to process company {company_id_str}",
                     extra={
-                        "context": "enrich_job_listings",
+                        "context": "enrich_all_job_listings",
                         "company_id": company_id_str,
                         "error_msg": str(e),
                     },
@@ -120,16 +120,16 @@ def enrich_job_listings():
         }
 
         logger.info(
-            "Completed enrich_job_listings task",
-            extra={"context": "enrich_job_listings", **summary},
+            "Completed enrich_all_job_listings task",
+            extra={"context": "enrich_all_job_listings", **summary},
         )
 
         return summary
 
     except Exception as e:
         logger.error(
-            "Failed to execute enrich_job_listings task",
-            extra={"context": "enrich_job_listings", "error_msg": str(e)},
+            "Failed to execute enrich_all_job_listings task",
+            extra={"context": "enrich_all_job_listings", "error_msg": str(e)},
             exc_info=True,
         )
         return {

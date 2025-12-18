@@ -7,10 +7,11 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from .c_tasks import (
     refresh_companies_job_listings,
-    enrich_job_listings,
+    enrich_all_job_listings,
+    enrich_company_job_listings,
     revise_company_enriched_jobs,
     validate_all_job_listings,
-    cleanup_stale_job_processes,
+    create_recommendations,
 )
 from domains.job_listings.process_repository import job_process_repository
 
@@ -72,10 +73,10 @@ async def trigger_enrich_followed_companies():
         dict: Task information including task_id and status
     """
     try:
-        logger.info("Manually triggering enrich_job_listings task")
+        logger.info("Manually triggering enrich_all_job_listings task")
 
         # Trigger the Celery task asynchronously
-        task = enrich_job_listings.apply_async()
+        task = enrich_all_job_listings.apply_async()
 
         return {
             "message": "Job listing enrichment task started",
@@ -89,6 +90,89 @@ async def trigger_enrich_followed_companies():
         logger.error(f"Failed to trigger enrichment task: {str(e)}")
         raise HTTPException(
             status_code=500, detail=f"Failed to trigger enrichment task: {str(e)}"
+        )
+
+
+@router.post("/enrich-company/{company_id}", response_model=dict)
+async def trigger_enrich_company(company_id: str):
+    """
+    Manually trigger enrichment of job listings for a specific company
+
+    This endpoint triggers the background task that:
+    1. Gets the specified company from the database
+    2. Gets job listings with source_status null or 'scraped'
+    3. Enriches job listings in batches using AI parsing
+    4. Extracts structured data (requirements, skills, categories, etc.)
+
+    The task uses rate limiting and batch processing to avoid overwhelming the API.
+    The task runs asynchronously. Use the returned task_id to check status.
+
+    Args:
+        company_id: The MongoDB ObjectId of the company to enrich
+
+    Returns:
+        dict: Task information including task_id and status
+    """
+    try:
+        logger.info(
+            f"Manually triggering enrich_company_job_listings task for company {company_id}"
+        )
+
+        # Trigger the Celery task asynchronously with company_id argument
+        task = enrich_company_job_listings.apply_async(args=[company_id])
+
+        return {
+            "message": f"Job listing enrichment task started for company {company_id}",
+            "task_id": task.id,
+            "company_id": company_id,
+            "status": "pending",
+            "info": "Task is running in the background. Check task status using the task_id.",
+        }
+
+    except Exception as e:
+        logger.error(
+            f"Failed to trigger enrichment task for company {company_id}: {str(e)}"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to trigger enrichment task: {str(e)}",
+        )
+
+
+@router.post("/create-recommendations", response_model=dict)
+async def trigger_create_recommendations():
+    """
+    Manually trigger creation of job recommendations for all candidates
+
+    This endpoint triggers the background task that:
+    1. Gets all candidates with search preferences (profile_categories and/or role_titles)
+    2. For each candidate, searches for job listings matching their preferences
+    3. Creates recommendations for matching jobs that don't already exist
+    4. Uses bulk operations for performance
+
+    The task runs asynchronously. Use the returned task_id to check status.
+
+    Returns:
+        dict: Task information including task_id and status
+    """
+    try:
+        logger.info("Manually triggering create_recommendations task")
+
+        # Trigger the Celery task asynchronously
+        task = create_recommendations.apply_async()
+
+        return {
+            "message": "Create recommendations task started",
+            "task_id": task.id,
+            "status": "pending",
+            "info": "Task is running in the background. Check task status using the task_id.",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to trigger create recommendations task: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to trigger create recommendations task: {str(e)}",
         )
 
 
@@ -183,36 +267,6 @@ async def trigger_revise_company_job_listings(company_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger task: {str(e)}",
-        )
-
-
-@router.post("/cleanup-stale-processes", response_model=dict)
-async def trigger_cleanup_stale_processes(hours: int = 2):
-    """
-    Trigger cleanup of stale job process locks
-
-    This endpoint triggers a task to clean up locks from jobs that have been
-    processing for too long (likely due to crashes or hung processes).
-
-    Args:
-        hours: Number of hours after which a lock is considered stale (default: 2)
-
-    Returns:
-        dict: Task information including task_id
-    """
-    try:
-        task = cleanup_stale_job_processes.delay(hours=hours)
-
-        return {
-            "status": "task_started",
-            "message": f"Cleanup task queued for locks older than {hours} hours",
-            "task_id": task.id,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger cleanup: {str(e)}",
         )
 
 

@@ -22,7 +22,7 @@ import { Company } from "@/contexts/admin-company-context";
 import { useAuth } from "@/contexts/auth-context";
 import { getCompanyJobListings } from "@/lib/api/company-jobs";
 import { JobListing } from "@/lib/types/job-listing";
-import { Briefcase, Loader2 } from "lucide-react";
+import { Briefcase, Check, Copy, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { CreateCompanyDialog } from "./create-company-dialog";
@@ -37,6 +37,7 @@ export default function AdminCompaniesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoadingJobsNew, setIsLoadingJobsNew] = useState(false);
   const [sourceStatus, setSourceStatus] = useState<string>("all");
+  const [copiedId, setCopiedId] = useState(false);
   const { token } = useAuth();
 
   const handleCompanyCreated = (company: Company) => {
@@ -145,6 +146,18 @@ export default function AdminCompaniesPage() {
       toast.error(error.message || "Failed to enrich company");
     } finally {
       setEnriching(false);
+    }
+  };
+  const handleCopyId = async () => {
+    if (!selectedCompany?._id) return;
+
+    try {
+      await navigator.clipboard.writeText(selectedCompany._id);
+      setCopiedId(true);
+      toast.success("Company ID copied to clipboard");
+      setTimeout(() => setCopiedId(false), 2000);
+    } catch (error) {
+      toast.error("Failed to copy ID");
     }
   };
 
@@ -275,6 +288,31 @@ export default function AdminCompaniesPage() {
                   </a>
                 )}
               </div>
+
+              {selectedCompany._id && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    Company ID
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-sm bg-muted px-2 py-1 rounded font-mono">
+                      {selectedCompany._id}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleCopyId}
+                      className="h-8 w-8 p-0"
+                    >
+                      {copiedId ? (
+                        <Check className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {selectedCompany.industries &&
                 selectedCompany.industries.length > 0 && (

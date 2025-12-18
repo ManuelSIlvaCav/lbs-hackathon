@@ -238,15 +238,7 @@ export function LocationStep({ data, onChange }: LocationStepProps) {
                   setOpenRegions((prev) => ({ ...prev, [region]: open }))
                 }
               >
-                <div
-                  className={`rounded-lg border-2 transition-all ${
-                    allSelected
-                      ? "bg-green-200 border-green-300"
-                      : someSelected
-                      ? "bg-green-100 border-green-200"
-                      : "bg-muted/50 border-muted"
-                  }`}
-                >
+                <div className="rounded-lg border-2 transition-all bg-white border-muted">
                   <CollapsibleTrigger asChild>
                     <div className="flex items-center justify-between p-4 cursor-pointer hover:opacity-80 transition-opacity">
                       <div className="flex-1">

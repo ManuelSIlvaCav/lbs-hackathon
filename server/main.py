@@ -22,6 +22,7 @@ from domains.job_listings.routes import router as job_listings_router
 from domains.companies.routes import router as companies_router
 from domains.auth.routes import router as auth_router
 from domains.tasks.routes import router as tasks_router
+from domains.recommendations.routes import router as recommendations_router
 from migrations.migrate_company_id_to_objectid import migrate_company_id_to_objectid
 from migrations.migrate_source_ids_to_objectid import SourceIdMigration
 
@@ -65,6 +66,7 @@ app.include_router(candidates_router)
 app.include_router(job_listings_router)
 app.include_router(companies_router)
 app.include_router(tasks_router)
+app.include_router(recommendations_router)
 
 
 @app.get("/")

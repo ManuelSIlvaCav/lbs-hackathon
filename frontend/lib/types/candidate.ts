@@ -93,12 +93,13 @@ export interface CandidateMetadata {
 
 export interface SearchPreferences {
   locations?: string[];
-  visa_sponsorship?: boolean;
+  visa_sponsorship?: boolean | { uk: boolean; eu: boolean; us: boolean };
   languages?: string[];
   role_type?: string[];
   role_level?: string[];
   minimum_salary?: number;
-  role_priorities?: string[];
+  profile_categories?: string[];
+  role_titles?: string[];
   favourite_industries?: string[];
   hidden_industries?: string[];
   favourite_technologies?: string[];
