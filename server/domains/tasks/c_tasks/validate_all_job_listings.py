@@ -10,7 +10,7 @@ from domains.companies.repository import company_repository
 from domains.job_listings.process_repository import (
     job_process_repository,
 )
-from .revise_company_jobs import revise_company_enriched_jobs
+from .enrich_company_job_listings import enrich_company_job_listings
 
 logger = logging.getLogger("app")
 
@@ -65,7 +65,10 @@ def validate_all_job_listings(self):
             )
 
         # Get all followed company IDs
-        company_ids = company_repository.get_followed_company_ids()
+        # company_ids = company_repository.get_followed_company_ids()
+
+        companies = company_repository.get_all_companies()
+        company_ids = [company.id for company in companies]
 
         if not company_ids:
             logger.info(
@@ -108,9 +111,10 @@ def validate_all_job_listings(self):
             )
 
             # Add company task signature to chain
+            # Pass "enriched" as source_status to re-validate already enriched jobs
             company_tasks.append(
-                revise_company_enriched_jobs.signature(
-                    args=(company_id, company_name, self.request.id),
+                enrich_company_job_listings.signature(
+                    args=(company_id, "enriched", self.request.id),
                     immutable=True,  # Don't pass previous result to next task
                 )
             )

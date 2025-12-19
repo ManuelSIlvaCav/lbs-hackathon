@@ -177,7 +177,15 @@ async def lookup_company_details(company_id: str):
         return company
 
     except Exception as e:
-        logger.error(f"Failed provider_get_company_information {company_id}: {str(e)}")
+        logger.error(
+            "Failed provider_get_company_information",
+            extra={
+                "context": "lookup_company_details",
+                "company_id": company_id,
+                "domain": domain,
+                "error_msg": str(e),
+            },
+        )
         raise HTTPException(
             status_code=500, detail=f"Failed to fetch enrichment data: {str(e)}"
         )

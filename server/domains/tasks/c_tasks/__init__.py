@@ -11,17 +11,17 @@ This module organizes all Celery tasks:
 from .refresh_job_listings import refresh_companies_job_listings
 from .enrich_all_job_listings import enrich_all_job_listings
 from .enrich_company_job_listings import enrich_company_job_listings
-from .revise_company_jobs import revise_company_enriched_jobs
 from .validate_all_job_listings import validate_all_job_listings
 from .create_recommendations import create_recommendations
+from .update_search_options import update_search_options
 from .utils import get_followed_company_ids
 
 __all__ = [
     "refresh_companies_job_listings",
     "enrich_all_job_listings",
     "enrich_company_job_listings",
-    "revise_company_enriched_jobs",
     "validate_all_job_listings",
     "create_recommendations",
+    "update_search_options",
     "get_followed_company_ids",
 ]

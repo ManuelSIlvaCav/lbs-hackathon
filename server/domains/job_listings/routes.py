@@ -63,24 +63,6 @@ async def create_job_listing(job_listing: JobListingCreate):
         )
 
 
-@router.get("/", response_model=List[JobListingModel])
-async def get_job_listings(
-    skip: int = 0,
-    limit: int = 100,
-    status_filter: Optional[str] = Query(None, alias="status"),
-):
-    """
-    Get all job listings with pagination and optional status filter
-
-    - **skip**: Number of records to skip (default: 0)
-    - **limit**: Maximum number of records to return (default: 100)
-    - **status**: Optional status filter ("active", "archived", etc.)
-    """
-    return job_listing_repository.get_all_job_listings(
-        skip=skip, limit=limit, status=status_filter
-    )
-
-
 @router.get("/search", response_model=PaginatedJobListingResponse)
 async def search_job_listings(
     company_id: Optional[str] = Query(None, description="Filter by company ID"),
@@ -138,53 +120,6 @@ async def search_job_listings(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to search job listings: {str(e)}",
-        )
-
-
-@router.get("/search-options", response_model=dict)
-async def get_search_options():
-    """
-    Get all available search filter options for job listings
-
-    Returns all distinct values for:
-    - origins: Job sources (linkedin, greenhouse, workday, careers)
-    - profile_categories: Job profile categories
-    - role_titles: Specific role titles (flat list for backward compatibility)
-    - role_titles_by_category: Role titles organized by profile category
-
-    This endpoint is used to populate search filter dropdowns in the frontend.
-
-    Returns:
-        dict: Object containing arrays of available filter options
-    """
-    try:
-        from .categories import PROFILE_CATEGORIES
-
-        # Get all profile categories
-        profile_categories = get_all_profile_categories()
-
-        # Get all role titles (already sorted and deduplicated)
-        role_titles = get_all_role_titles()
-
-        # Get all origins from enum
-        origins = [origin.value for origin in JobListingOrigin]
-
-        # Get role titles organized by category
-        role_titles_by_category = {
-            category: sorted(roles) for category, roles in PROFILE_CATEGORIES.items()
-        }
-
-        return {
-            "origins": origins,
-            "profile_categories": sorted(profile_categories),
-            "role_titles": role_titles,
-            "role_titles_by_category": role_titles_by_category,
-        }
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to fetch search options: {str(e)}",
         )
 
 

@@ -22,21 +22,30 @@ BATCH_SIZE = 15  # Process 15 job listings at a time
 
 @shared_task(
     name="domains.tasks.c_tasks.enrich_company_job_listings",
+    bind=True,
     soft_time_limit=3600,
     time_limit=4500,
 )
-def enrich_company_job_listings(company_id: str):
+def enrich_company_job_listings(
+    self,
+    company_id: str,
+    source_status: str = "scrapped",
+    parent_instance_id: str = None,
+):
     """
     Enrich job listings for a single company.
 
     This task:
     1. Gets the company from the database
-    2. Gets job listings with source_status null or 'scraped'
+    2. Gets job listings with specified source_status
     3. Enriches job listings in batches to respect rate limits
     4. Uses async processing to avoid overwhelming the API
 
     Args:
         company_id: The ID of the company to enrich job listings for
+        source_status: Filter for job listings (default: "scrapped" for initial enrichment,
+                      use "enriched" for re-validation/revision)
+        parent_instance_id: Optional parent task ID for chain tracking
 
     Returns:
         dict: Summary of the enrichment operation including success/failure counts
@@ -68,13 +77,23 @@ def enrich_company_job_listings(company_id: str):
                 "failed_at": datetime.now().isoformat(),
             }
 
-        # Get job listings with source_status null or 'scraped'
+        # Get job listings with specified source_status
+        # Build query based on source_status parameter
+        if source_status == "scrapped":
+            # For initial enrichment: get jobs with null or 'scrapped' status
+            status_query = {
+                "$or": [{"source_status": None}, {"source_status": "scrapped"}]
+            }
+        else:
+            # For re-validation/revision: get jobs with specific status (e.g., 'enriched')
+            status_query = {"source_status": source_status}
+
         job_listings = job_listing_repository.collection.find(
             {
                 "company_id": ObjectId(company_id),
-                "$or": [{"source_status": None}, {"source_status": "scrapped"}],
+                **status_query,
             }
-        )
+        ).sort("updated_at", -1)
 
         job_listing_ids = [str(job["_id"]) for job in job_listings]
 
@@ -155,7 +174,7 @@ def enrich_company_job_listings(company_id: str):
                 "company_id": company_id,
                 "company_name": company.name,
                 "processed": len(job_listing_ids),
-                "time_taken_secs": f"{request_time * 1000:.0f} ms",
+                "elapsed_time": round(request_time, 2),
             },
         )
 

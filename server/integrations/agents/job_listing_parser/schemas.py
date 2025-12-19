@@ -89,15 +89,14 @@ class AgentResult(str, Enum):
 
     SUCCESS = "success"
     NO_LONGER_AVAILABLE = "no_longer_available"
+    BAD_FORMAT = "bad_format"
 
 
 class FailedResultError(str, Enum):
     """Types of parsing failures."""
 
-    PARSING_FAILED = "parsing_failed"
-    JOB_NOT_FOUND = "job_not_found"
     NO_LONGER_AVAILABLE = "no_longer_available"
-    OTHER = "other"
+    BAD_FORMAT = "bad_format"
 
 
 class AgentJobCategorizationSchema(BaseModel):

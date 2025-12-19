@@ -137,7 +137,6 @@ class JobListingRepository:
                 parsed_job.job_info.work_arrangement if parsed_job else None
             ),
             source_status="enriched" if metadata else "scrapped",
-            status="active",
             created_at=datetime.now(),
             updated_at=datetime.now(),
         )
@@ -250,91 +249,6 @@ class JobListingRepository:
         except Exception as e:
             print(f"Error getting job listing: {e}")
             return None
-
-    def get_all_job_listings(
-        self, skip: int = 0, limit: int = 100, status: Optional[str] = None
-    ) -> List[JobListingModel]:
-        """
-        Get all job listings with pagination and optional status filter, including company info
-
-        Args:
-            skip: Number of documents to skip
-            limit: Maximum number of documents to return
-            status: Optional status filter ("active", "archived", etc.)
-
-        Returns:
-            List of JobListingModel objects
-        """
-        # Build aggregation pipeline
-        pipeline = []
-
-        # Add match stage if status filter exists
-        if status:
-            pipeline.append({"$match": {"status": status}})
-
-        # Sort by most recent first
-        pipeline.append({"$sort": {"created_at": -1}})
-
-        # Skip and limit
-        pipeline.append({"$skip": skip})
-        pipeline.append({"$limit": limit})
-
-        # Add $lookup stage to join company information
-        pipeline.append(
-            {
-                "$lookup": {
-                    "from": "companies",
-                    "localField": "company_id",
-                    "foreignField": "_id",
-                    "as": "company_info_array",
-                    "pipeline": [
-                        {
-                            "$project": {
-                                "_id": 1,
-                                "name": 1,
-                                "company_url": 1,
-                                "linkedin_url": 1,
-                                "logo_url": 1,
-                                "domain": 1,
-                                "industries": 1,
-                                "description": 1,
-                            }
-                        },
-                    ],
-                }
-            }
-        )
-
-        # Convert company_info_array to single object
-        pipeline.append(
-            {
-                "$addFields": {
-                    "company_info": {
-                        "$cond": {
-                            "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
-                            "then": {"$arrayElemAt": ["$company_info_array", 0]},
-                            "else": None,
-                        }
-                    }
-                }
-            }
-        )
-
-        # Remove the temporary array field
-        pipeline.append({"$project": {"company_info_array": 0}})
-
-        # Execute aggregation
-        job_listings = []
-        for job in self.collection.aggregate(pipeline):
-            job["_id"] = str(job["_id"])
-
-            # Convert company_info._id to string if it exists
-            if job.get("company_info") and job["company_info"].get("_id"):
-                job["company_info"]["_id"] = str(job["company_info"]["_id"])
-
-            job_listings.append(JobListingModel(**job))
-
-        return job_listings
 
     def update_job_listing(
         self, job_id: str, job_data: JobListingUpdate
@@ -573,7 +487,7 @@ class JobListingRepository:
                     )
                     if source:
                         job_listing_source_repository.collection.update_one(
-                            {"job_listing_id": job_id},
+                            {"job_listing_id": ObjectId(job_id)},
                             {
                                 "$set": {
                                     "sources.job_listing_agent": metadata.model_dump(
@@ -591,7 +505,7 @@ class JobListingRepository:
                         )
                         job_listing_source_repository.collection.insert_one(
                             {
-                                "job_listing_id": job_id,
+                                "job_listing_id": ObjectId(job_id),
                                 "sources": source_field.model_dump(mode="python"),
                                 "created_at": datetime.now(),
                                 "updated_at": datetime.now(),
@@ -646,6 +560,8 @@ class JobListingRepository:
             )
             parsed_job = await run_agent_job_categorization(categorization_input)
 
+            date_now = datetime.now()
+
             if not parsed_job:
                 logger.error(
                     "Failed to parse job description, deactivating job listing",
@@ -659,7 +575,10 @@ class JobListingRepository:
                 # Deactivate the job listing since parsing failed (no metadata to store)
                 return self.deactivate_job_listing(job_id)
 
-            if parsed_job.result == "no_longer_available":
+            if (
+                parsed_job.result == "no_longer_available"
+                or parsed_job.result == "bad_format"
+            ):
                 logger.info(
                     "Job listing no longer available, deactivating job listing",
                     extra={
@@ -683,7 +602,7 @@ class JobListingRepository:
 
             # Create metadata object for storage in sources
             metadata = JobListingMetadata(
-                categorization_schema=parsed_job, updated_at=datetime.now()
+                categorization_schema=parsed_job, updated_at=date_now
             )
 
             # Save metadata to job_listings_source collection
@@ -694,14 +613,22 @@ class JobListingRepository:
                 # Update existing source with agent metadata
                 # Use mode='python' to properly serialize nested Pydantic models as dicts
                 update_result = job_listing_source_repository.collection.update_one(
-                    {"job_listing_id": job_id},
+                    {"job_listing_id": ObjectId(job_id)},
                     {
                         "$set": {
                             "sources.job_listing_agent": metadata.model_dump(
                                 mode="python"
                             ),
-                            "updated_at": datetime.now(),
+                            "updated_at": date_now,
                         }
+                    },
+                )
+                logger.info(
+                    "Updated job listing source with agent metadata",
+                    extra={
+                        "context": "enrich_job_listings",
+                        "job_listing_id": job_id,
+                        "modified_count": update_result.modified_count,
                     },
                 )
 
@@ -717,16 +644,21 @@ class JobListingRepository:
                     # Use mode='python' to properly serialize nested Pydantic models as dicts
                     job_listing_source_repository.collection.insert_one(
                         {
-                            "job_listing_id": job_id,
-                            "company_id": job.company_id,
+                            "job_listing_id": ObjectId(job_id),
+                            "company_id": ObjectId(job.company_id),
                             "sources": source_field.model_dump(mode="python"),
-                            "created_at": datetime.now(),
-                            "updated_at": datetime.now(),
+                            "created_at": date_now,
+                            "updated_at": date_now,
                         }
                     )
 
             # Update the job listing with enriched data (WITHOUT metadata)
             update_data = {
+                "title": (
+                    parsed_job.job_info.job_title
+                    if parsed_job.job_info.job_title
+                    else job.title
+                ),
                 "profile_categories": parsed_job.job_info.profile_categories,
                 "role_titles": parsed_job.job_info.role_titles,
                 "employement_type": parsed_job.job_info.employement_type,
@@ -735,7 +667,8 @@ class JobListingRepository:
                 "salary_range_max": parsed_job.job_info.salary_max,
                 "salary_currency": parsed_job.job_info.currency,
                 "source_status": "enriched",
-                "updated_at": datetime.now(),
+                "updated_at": date_now,
+                "enriched_at": date_now,
             }
 
             result: UpdateResult = self.collection.update_one(
@@ -880,9 +813,9 @@ class JobListingRepository:
             {
                 "company_id": company_oid,
                 "url": {"$nin": list(current_urls), "$exists": True},
-                "status": "active",
+                "source_status": {"$eq": "enriched"},
             },
-            {"$set": {"status": "expired", "updated_at": datetime.now()}},
+            {"$set": {"source_status": "expired", "updated_at": datetime.now()}},
         )
         expired_count = expired_result.modified_count
 
@@ -1078,6 +1011,86 @@ class JobListingRepository:
                 extra={"context": "JobListingRepository", "error_msg": str(e)},
             )
             return [], 0
+
+    def get_countries(self) -> List[str]:
+        """
+        Get all unique countries from enriched job listings
+
+        Returns:
+            Sorted list of unique country names
+        """
+        try:
+            pipeline = [
+                # Only consider enriched job listings
+                {"$match": {"source_status": "enriched", "country": {"$ne": None}}},
+                {"$group": {"_id": "$country"}},
+                {"$sort": {"_id": 1}},
+            ]
+
+            results = list(self.collection.aggregate(pipeline))
+            return [result["_id"] for result in results if result["_id"]]
+
+        except Exception as e:
+            logger.error(
+                "Error getting countries",
+                extra={"context": "JobListingRepository", "error_msg": str(e)},
+            )
+            return []
+
+    def get_profile_categories(self) -> List[str]:
+        """
+        Get all unique profile categories from enriched job listings
+
+        Returns:
+            Sorted list of unique profile categories
+        """
+        try:
+            pipeline = [
+                {
+                    "$match": {
+                        "source_status": "enriched",
+                        "profile_categories": {"$ne": None},
+                    }
+                },
+                {"$unwind": "$profile_categories"},
+                {"$group": {"_id": "$profile_categories"}},
+                {"$sort": {"_id": 1}},
+            ]
+
+            results = list(self.collection.aggregate(pipeline))
+            return [result["_id"] for result in results if result["_id"]]
+
+        except Exception as e:
+            logger.error(
+                "Error getting profile categories",
+                extra={"context": "JobListingRepository", "error_msg": str(e)},
+            )
+            return []
+
+    def get_role_titles(self) -> List[str]:
+        """
+        Get all unique role titles from enriched job listings
+
+        Returns:
+            Sorted list of unique role titles
+        """
+        try:
+            pipeline = [
+                {"$match": {"source_status": "enriched", "role_titles": {"$ne": None}}},
+                {"$unwind": "$role_titles"},
+                {"$group": {"_id": "$role_titles"}},
+                {"$sort": {"_id": 1}},
+            ]
+
+            results = list(self.collection.aggregate(pipeline))
+            return [result["_id"] for result in results if result["_id"]]
+
+        except Exception as e:
+            logger.error(
+                "Error getting role titles",
+                extra={"context": "JobListingRepository", "error_msg": str(e)},
+            )
+            return []
 
 
 # Singleton instance

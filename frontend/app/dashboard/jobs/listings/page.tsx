@@ -176,7 +176,7 @@ export default function JobListingsPage() {
             <div className="grid gap-4">
               {allJobs.map((job) => (
                 <JobListingCard
-                  key={job._id}
+                  key={`${job._id}`}
                   job={job as any}
                   onEnrich={undefined}
                 />

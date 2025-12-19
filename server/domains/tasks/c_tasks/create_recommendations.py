@@ -16,6 +16,7 @@ from bson import ObjectId
 from database import get_collection
 from domains.recommendations.repository import RecommendationRepository
 from domains.recommendations.models import RecommendationCreate
+from domains.job_listings.categories import get_role_titles_by_category
 
 logger = logging.getLogger("app")
 
@@ -82,38 +83,94 @@ def create_recommendations():
 
                 profile_categories = search_prefs.get("profile_categories", []) or []
                 role_titles = search_prefs.get("role_titles", []) or []
+                locations = search_prefs.get("locations", []) or []
 
                 if not profile_categories and not role_titles:
                     continue
 
-                # Build query to find matching job listings
-                # Jobs must match at least one profile_category OR one role_title
+                # Build $or conditions for matching
                 match_conditions = []
 
-                if profile_categories:
-                    match_conditions.append(
-                        {"profile_categories": {"$in": profile_categories}}
-                    )
+                # Strategy:
+                # 1. If candidate has both profile_categories AND role_titles:
+                #    - For each category, intersect candidate's role_titles with valid roles for that category
+                #    - Only search for jobs with that category AND those specific intersected roles
+                # 2. If candidate only has profile_categories (no specific roles):
+                #    - Search for jobs with any of those categories and any valid role for that category
+                # 3. If candidate only has role_titles (no categories):
+                #    - Search for jobs with any of those role_titles
 
-                if role_titles:
+                if profile_categories and role_titles:
+                    # Case 1: Both categories and roles specified
+                    # For each category, find intersection of candidate's roles with valid roles for that category
+                    for category in profile_categories:
+                        valid_roles_for_category = get_role_titles_by_category(category)
+                        # Intersect candidate's selected roles with valid roles for this category
+                        matching_roles = [
+                            r for r in role_titles if r in valid_roles_for_category
+                        ]
+
+                        if matching_roles:
+                            # Add condition: category matches AND role is in candidate's selected roles (that are valid for this category)
+                            match_conditions.append(
+                                {
+                                    "$and": [
+                                        {"profile_categories": category},
+                                        {"role_titles": {"$in": matching_roles}},
+                                    ]
+                                }
+                            )
+
+                elif profile_categories and not role_titles:
+                    # Case 2: Only categories specified, no specific roles
+                    # Match any job with these categories and any valid role
+                    for category in profile_categories:
+                        valid_roles_for_category = get_role_titles_by_category(category)
+                        if valid_roles_for_category:
+                            match_conditions.append(
+                                {
+                                    "$and": [
+                                        {"profile_categories": category},
+                                        {
+                                            "role_titles": {
+                                                "$in": valid_roles_for_category
+                                            }
+                                        },
+                                    ]
+                                }
+                            )
+
+                elif role_titles and not profile_categories:
+                    # Case 3: Only roles specified, no categories
+                    # Match any job with these role titles
                     match_conditions.append({"role_titles": {"$in": role_titles}})
 
-                # Only search active job listings
-                query = {
-                    "$and": [
-                        {"$or": match_conditions},
-                        {"source_status": "enriched"},
-                    ]
+                # Build the base query
+                base_match = {
+                    "source_status": "enriched",
                 }
 
+                # Add location filter if specified
+                if locations:
+                    base_match["country"] = {"$in": locations}
+
+                # Add the OR conditions for category+role matching
+                if match_conditions:
+                    base_match["$or"] = match_conditions
+
                 # Find matching job listings
-                matching_jobs = list(job_listings_collection.find(query))
+                matching_jobs = list(job_listings_collection.find(base_match))
                 jobs_found = len(matching_jobs)
                 total_jobs_found += jobs_found
 
                 if jobs_found > 0:
                     logger.info(
-                        f"Found {jobs_found} matching jobs for candidate {candidate_id}"
+                        "Found matching jobs for candidate",
+                        extra={
+                            "candidate_id": str(candidate_id),
+                            "jobs_found": jobs_found,
+                            "query": base_match,
+                        },
                     )
 
                     # Get existing recommendations for this candidate
@@ -178,6 +235,7 @@ def create_recommendations():
                             ),
                             reason=reason,
                             recommendation_status="recommended",
+                            recommended_at=datetime.now(),
                         )
 
                         recommendations_to_create.append(recommendation)
@@ -185,13 +243,16 @@ def create_recommendations():
                     # Bulk create recommendations if any
                     if recommendations_to_create:
                         try:
-                            created = recommendation_repo.create_recommendations_bulk(
+                            recommendation_repo.create_recommendations_bulk(
                                 recommendations_to_create
                             )
-                            created_count = len(created)
-                            total_recommendations_created += created_count
+
                             logger.info(
-                                f"Created {created_count} recommendations for candidate {candidate_id}"
+                                "Created recommendations for candidate",
+                                extra={
+                                    "candidate_id": str(candidate_id),
+                                    "recommendations": len(recommendations_to_create),
+                                },
                             )
                         except Exception as e:
                             error_msg = f"Error creating recommendations for candidate {candidate_id}: {str(e)}"
@@ -209,16 +270,9 @@ def create_recommendations():
             "status": "completed",
             "total_candidates_processed": total_candidates,
             "total_jobs_found": total_jobs_found,
-            "total_recommendations_created": total_recommendations_created,
             "errors": errors,
             "completed_at": datetime.now().isoformat(),
         }
-
-        logger.info(
-            f"create_recommendations task completed: "
-            f"{total_recommendations_created} recommendations created for "
-            f"{total_candidates} candidates"
-        )
 
         return result
 
@@ -229,5 +283,4 @@ def create_recommendations():
             "status": "failed",
             "error": error_msg,
             "total_candidates_processed": total_candidates,
-            "total_recommendations_created": total_recommendations_created,
         }

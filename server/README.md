@@ -99,3 +99,16 @@ Per 10k Job Listing
 - 40 Output
 
   67.5 USD per 10k Job Listings
+
+# Time analysis
+
+- 200 Job Listings -> 20min
+- 600 JobListing -> 1h
+
+- Average company 50-200 jobListings (125 average)
+- Per company 12.5 minute to process
+
+- Improvemnts OpenAI increase rate limit
+  https://platform.openai.com/docs/guides/rate-limits
+
+currently bottleneck is 200k TokensPerMinute

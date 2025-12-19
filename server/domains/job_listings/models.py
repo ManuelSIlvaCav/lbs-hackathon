@@ -65,6 +65,7 @@ class JobListingSourceStatus(str, Enum):
     SCRAPPED = "scrapped"
     ACTIVE = "active"
     DEACTIVATED = "deactivated"
+    EXPIRED = "expired"
 
 
 class JobListingModel(BaseModel):

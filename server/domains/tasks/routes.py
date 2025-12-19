@@ -9,9 +9,9 @@ from .c_tasks import (
     refresh_companies_job_listings,
     enrich_all_job_listings,
     enrich_company_job_listings,
-    revise_company_enriched_jobs,
     validate_all_job_listings,
     create_recommendations,
+    update_search_options,
 )
 from domains.job_listings.process_repository import job_process_repository
 
@@ -176,6 +176,43 @@ async def trigger_create_recommendations():
         )
 
 
+@router.post("/update-search-options", response_model=dict)
+async def trigger_update_search_options():
+    """
+    Manually trigger update of search options from job listings
+
+    This endpoint triggers the background task that:
+    1. Aggregates unique countries with cities from enriched job listings
+    2. Aggregates unique profile categories from enriched job listings
+    3. Aggregates unique role titles from enriched job listings
+    4. Stores the aggregated data in the search_options collection
+
+    The task runs asynchronously. Use the returned task_id to check status.
+
+    Returns:
+        dict: Task information including task_id and status
+    """
+    try:
+        logger.info("Manually triggering update_search_options task")
+
+        # Trigger the Celery task asynchronously
+        task = update_search_options.apply_async()
+
+        return {
+            "message": "Update search options task started",
+            "task_id": task.id,
+            "status": "pending",
+            "info": "Task is running in the background. Check task status using the task_id.",
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to trigger update search options task: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to trigger update search options task: {str(e)}",
+        )
+
+
 @router.post("/revise-enriched", response_model=dict)
 async def trigger_revise_enriched_job_listings():
     """
@@ -249,8 +286,8 @@ async def trigger_revise_company_job_listings(company_id: str):
                 detail=f"Company with ID {company_id} not found",
             )
 
-        # Trigger company-specific task
-        task = revise_company_enriched_jobs.delay(company_id, company.name)
+        # Trigger company-specific task with "enriched" status to re-validate
+        task = enrich_company_job_listings.delay(company_id, "enriched")
 
         return {
             "status": "task_started",

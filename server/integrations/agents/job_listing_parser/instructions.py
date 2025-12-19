@@ -220,15 +220,29 @@ description_summary must be a short 2 to 3 sentence summary of what the role is 
 The result field MUST be populated with one of these values:
 - "success": Use this when you successfully parsed the job AND the job posting is open/available (or status is unclear)
 - "no_longer_available": Use this ONLY when the job posting EXPLICITLY states it is closed or unavailable
+- "bad_format": Use this when the page content is invalid (error messages, empty pages, malformed content) OR when you CANNOT extract MINIMUM required fields (job_title AND at least one profile_category)
 
 The failed_result_error field:
 - Set to null when result is "success"
 - Set to "no_longer_available" when result is "no_longer_available"
-- Set to "parsing_failed" if you cannot extract meaningful job information from the content
-- Set to "job_not_found" if the page shows a 404 or "job not found" error
-- Set to "other" for any other failure scenario
+- Set to "bad_format" when result is "bad_format"
 
 Both fields are REQUIRED and must never be null. When in doubt about availability, use result="success" with failed_result_error=null.
+
+CRITICAL BAD FORMAT CHECK:
+BEFORE returning result="success", verify that you can extract AT MINIMUM:
+1. A job_title (not null, not generic error text)
+2. At least ONE profile_category from the predefined list
+
+If EITHER is missing or cannot be reliably inferred from the content, set:
+- result = "bad_format"
+- failed_result_error = "bad_format"
+
+Examples of bad_format:
+- "An error has occurred. An unexpected error occurred on our website."
+- Empty pages with no job content
+- Generic error messages or maintenance pages
+- Pages with only company branding but no actual job description
 
 EXTRACTION RULES:
 1. Copy each requirement statement EXACTLY as written in the JD (verbatim, word-for-word)
@@ -408,14 +422,17 @@ EXPIRED: "Job Title Company Location See who Company has hired..."
 {get_common_parsing_instructions()}
 
 RESULT FIELD (MANDATORY):
-- "success": Job has both "Apply" and "Save" buttons
+- "success": Job has both "Apply" and "Save" buttons AND you can extract job_title and at least one profile_category
 - "no_longer_available": Missing "Apply" or "Save"
+- "bad_format": Cannot extract job_title or profile_categories (invalid content, error pages)
 
 FINAL INSTRUCTION:
 1. FIRST: Check for "Apply" AND "Save". If missing, set result="no_longer_available".
-2. If both present, set result="success" and proceed with parsing.
-3. Fill every field strictly according to schema.
-4. Output only the final JSON object.
+2. If both present, attempt to parse job_title and profile_categories.
+3. If you CANNOT extract both job_title AND at least one profile_category, set result="bad_format" and failed_result_error="bad_format".
+4. Only if you successfully extract required fields, set result="success" and proceed with full parsing.
+5. Fill every field strictly according to schema.
+6. Output only the final JSON object.
 """
 
 
@@ -459,13 +476,16 @@ DEFAULT: Assume the job IS available (result="success") unless you find a clear 
 {get_common_parsing_instructions()}
 
 RESULT FIELD (MANDATORY):
-- "success": Job posting is open/available (or status unclear)
+- "success": Job posting is open/available (or status unclear) AND you can extract job_title and at least one profile_category
 - "no_longer_available": Job posting EXPLICITLY states it is closed
+- "bad_format": Cannot extract job_title or profile_categories (invalid content, error pages)
 
 FINAL INSTRUCTION:
-1. Check if job EXPLICITLY states it is closed. Be CONSERVATIVE.
-2. Set result and failed_result_error accordingly.
-3. Classify requirements precisely into minimum vs preferred.
-4. Fill every field strictly according to schema.
-5. Output only the final JSON object.
+1. Check if job EXPLICITLY states it is closed. Be CONSERVATIVE. If so, set result="no_longer_available".
+2. Attempt to parse job_title and profile_categories.
+3. If you CANNOT extract both job_title AND at least one profile_category, set result="bad_format" and failed_result_error="bad_format".
+4. Only if you successfully extract required fields, set result="success" and proceed with full parsing.
+5. Classify requirements precisely into minimum vs preferred.
+6. Fill every field strictly according to schema.
+7. Output only the final JSON object.
 """

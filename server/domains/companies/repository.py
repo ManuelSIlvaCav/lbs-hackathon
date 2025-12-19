@@ -191,6 +191,29 @@ class CompanyRepository:
 
         return [doc["_id"] for doc in followed_companies]
 
+    def get_all_companies(self) -> List[CompanyModel]:
+        """Get all companies from the database"""
+        cursor = self.collection.find({})
+
+        companies = []
+        for doc in cursor:
+            companies.append(
+                CompanyModel(
+                    id=str(doc["_id"]),
+                    name=doc["name"],
+                    company_url=doc.get("company_url"),
+                    industries=doc.get("industries"),
+                    description=doc.get("description"),
+                    logo_url=doc.get("logo_url"),
+                    linkedin_url=doc.get("linkedin_url"),
+                    domain=doc.get("domain"),
+                    created_at=doc.get("created_at"),
+                    updated_at=doc.get("updated_at"),
+                )
+            )
+
+        return companies
+
 
 # Singleton instance
 company_repository = CompanyRepository()
