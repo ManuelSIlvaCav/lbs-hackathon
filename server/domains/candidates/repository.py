@@ -11,7 +11,8 @@ from pymongo.collection import Collection
 from pymongo.results import InsertOneResult, UpdateResult, DeleteResult
 from pymongo import ASCENDING
 
-from domains.candidates import candidate_file_repository
+from .candidate_file_repository import candidate_file_repository
+
 
 from .models import (
     CandidateModel,

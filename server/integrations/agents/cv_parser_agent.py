@@ -6,9 +6,6 @@ from typing import Any, Dict, Optional
 from utils.files import file_to_base64
 
 
-# TODO - agregar company types como enum y arreglar frontend select
-
-
 class AgentCvCategorizationSchema__ContactInfo(BaseModel):
     full_name: str | None = None
     phone: str | None = None
@@ -41,6 +38,7 @@ class AgentCvCategorizationSchema__ExperienceItem(BaseModel):
     role_functions: list[str] = []
     hard_skills: list[str] = []
     soft_skills: list[str] = []
+    bullets: list[str] = []
     summary: str | None = None
     is_internship: bool = False
 
@@ -203,8 +201,7 @@ industry_primary: \"Banking\"
 company_type: \"corporate\"
 skills and summary per role
 hard_skills: array of strings. Technical and functional skills clearly associated with this role. Examples: \"SQL\", \"Python\", \"Tableau\", \"Power BI\", \"financial modelling\", \"product discovery\", \"A/B testing\".
-soft_skills: array of strings. Behavioural skills mentioned or strongly implied. Examples: \"stakeholder management\", \"leadership\", \"teamwork\", \"communication\", \"project management\".
-summary: string or null. Short free-text summary of responsibilities and key achievements in this role, based only on the CV content.
+soft_skills: array of strings. Behavioural skills mentioned or strongly implied. Examples: \"stakeholder management\", \"leadership\", \"teamwork\", \"communication\", \"project management\".bullets: array of strings. Extract the individual bullet points or key responsibilities/achievements listed for this role in the CV. Each bullet should be a separate string in the array. Preserve the original wording as much as possible. If no bullets are provided, use an empty array.summary: string or null. Short free-text summary of responsibilities and key achievements in this role, based only on the CV content.
 is_internship: boolean. Use true if the role is clearly an internship, summer analyst, placement, or similar. Otherwise use false.
 4. skills_summary
 Object that aggregates skills across the whole CV.

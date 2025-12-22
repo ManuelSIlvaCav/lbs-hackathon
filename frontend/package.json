@@ -22,6 +22,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-separator": "^1.1.8",
     "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.1.7",
     "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-form": "^1.25.0",
@@ -37,6 +38,7 @@
     "react-hook-form": "^7.66.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
+    "uuid": "^11.1.0",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -44,6 +46,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.3",
     "tailwindcss": "^4",

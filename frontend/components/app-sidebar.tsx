@@ -1,8 +1,17 @@
 "use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { Briefcase, LogOut, Search, Settings, User, Zap } from "lucide-react";
+import {
+  Briefcase,
+  Building,
+  LogOut,
+  Search,
+  Settings,
+  User,
+  Zap,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import {
   Sidebar,
@@ -15,6 +24,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSkeleton,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Badge } from "./ui/badge";
@@ -34,6 +44,20 @@ const prepareItems = [
       <a href={"/dashboard/candidate/search-preferences"}>
         <Settings />
         <span>{"Search Preferences"}</span>
+        <Badge variant={"default"} className="ml-auto">
+          Beta
+        </Badge>
+      </a>
+    ),
+  },
+  {
+    title: "CV Builder",
+    icon: Building,
+    url: "/dashboard/candidate/cv-builder",
+    component: (
+      <a href={"/dashboard/candidate/cv-builder"}>
+        <Building />
+        <span>{"CV Builder"}</span>
         <Badge variant={"default"} className="ml-auto">
           Beta
         </Badge>
@@ -85,10 +109,41 @@ const adminItems = [
   },
 ];
 
+function AdminSideBarGroup() {
+  const { user, logout, isAdmin } = useAuth();
+
+  return (
+    <SidebarMenuSkeleton>
+      <SidebarGroup>
+        <SidebarGroupLabel>ADMIN</SidebarGroupLabel>
+        <SidebarGroupContent>
+          <SidebarMenu>
+            {adminItems.map((item) => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton asChild>
+                  <a href={item.url}>
+                    <item.icon />
+                    <span>{item.title}</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </SidebarMenuSkeleton>
+  );
+}
+
 export function AppSidebar() {
   const { state } = useSidebar();
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, isLoading } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -176,7 +231,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {isAdmin && (
+        {mounted && !isLoading && isAdmin && (
           <SidebarGroup>
             <SidebarGroupLabel>ADMIN</SidebarGroupLabel>
             <SidebarGroupContent>
@@ -215,7 +270,7 @@ export function AppSidebar() {
             <div className="flex flex-col overflow-hidden">
               <span className="truncate text-sm font-medium">
                 {user.full_name || "User"}
-                {isAdmin && (
+                {mounted && !isLoading && isAdmin && (
                   <span className="ml-2 text-xs text-orange-600">(Admin)</span>
                 )}
               </span>

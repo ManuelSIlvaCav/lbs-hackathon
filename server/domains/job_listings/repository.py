@@ -302,73 +302,6 @@ class JobListingRepository:
             print(f"Error deleting job listing: {e}")
             return False
 
-    def save_job_listing(self, job_data: JobListingCreate) -> str:
-        """
-        Save a single job listing (used by enrichment system)
-        Note: Source tracking must be done separately via JobListingSourceRepository
-
-        Args:
-            job_data: JobListingCreate object with job information
-
-        Returns:
-            String ID of the inserted job listing
-        """
-        job_dict = job_data.model_dump()
-        job_dict["created_at"] = datetime.now()
-
-        # Convert company_id to ObjectId if present
-        if job_dict.get("company_id") and isinstance(job_dict["company_id"], str):
-            job_dict["company_id"] = ObjectId(job_dict["company_id"])
-
-        # Extract and set origin fields
-        if job_data.url:
-            origin_domain = extract_domain(job_data.url)
-            origin = determine_origin(origin_domain)
-            job_dict["origin_domain"] = origin_domain
-            job_dict["origin"] = origin
-
-        result = self.collection.insert_one(job_dict)
-        job_listing_id = str(result.inserted_id)
-
-        return job_listing_id
-
-    def save_job_listings_bulk(self, job_listings: List[JobListingCreate]) -> List[str]:
-        """
-        Save multiple job listings in bulk (used by enrichment system)
-        Note: Source tracking must be done separately via JobListingSourceRepository
-
-        Args:
-            job_listings: List of JobListingCreate objects
-
-        Returns:
-            List of string IDs of the inserted job listings
-        """
-        if not job_listings:
-            return []
-
-        jobs_to_insert = []
-        for job_data in job_listings:
-            job_dict = job_data.model_dump()
-            job_dict["created_at"] = datetime.now()
-
-            # Convert company_id to ObjectId if present
-            if job_dict.get("company_id") and isinstance(job_dict["company_id"], str):
-                job_dict["company_id"] = ObjectId(job_dict["company_id"])
-
-            # Extract and set origin fields
-            if job_data.url:
-                origin_domain = extract_domain(job_data.url)
-                origin = determine_origin(origin_domain)
-                job_dict["origin_domain"] = origin_domain
-                job_dict["origin"] = origin
-
-            jobs_to_insert.append(job_dict)
-
-        result = self.collection.insert_many(jobs_to_insert)
-        job_listing_ids = [str(id) for id in result.inserted_ids]
-
-        return job_listing_ids
-
     def get_job_listings_by_company(
         self,
         company_id: str,
@@ -397,27 +330,6 @@ class JobListingRepository:
         cursor = self.collection.find(query_filter).sort(
             "last_seen_at" if source_status == "enriched" else "deactivated_at", -1
         )
-
-        job_listings = []
-        for doc in cursor:
-            doc["_id"] = str(doc["_id"])
-            job_listings.append(JobListingModel(**doc))
-
-        return job_listings
-
-    def get_job_listings_by_enrichment(
-        self, job_enrichment_id: str
-    ) -> List[JobListingModel]:
-        """
-        Get all job listings for a specific enrichment
-
-        Args:
-            job_enrichment_id: Job enrichment ID to filter by
-
-        Returns:
-            List of JobListingModel objects
-        """
-        cursor = self.collection.find({"job_enrichment_id": job_enrichment_id})
 
         job_listings = []
         for doc in cursor:
@@ -821,33 +733,6 @@ class JobListingRepository:
 
         return inserted_ids, updated_ids, expired_count
 
-    def get_job_listing_by_url(
-        self, url: str, company_id: Optional[str] = None
-    ) -> Optional[JobListingModel]:
-        """
-        Get a job listing by URL
-
-        Args:
-            url: Job listing URL
-            company_id: Optional company_id to narrow search
-
-        Returns:
-            JobListingModel if found, None otherwise
-        """
-        try:
-            query = {"url": url}
-            if company_id:
-                query["company_id"] = company_id
-
-            job = self.collection.find_one(query)
-            if job:
-                job["_id"] = str(job["_id"])
-                return JobListingModel(**job)
-            return None
-        except Exception as e:
-            print(f"Error getting job listing by URL: {e}")
-            return None
-
     def search_job_listings(
         self,
         company_id: Optional[str] = None,
@@ -861,7 +746,8 @@ class JobListingRepository:
     ) -> tuple[List[JobListingModel], int]:
         """
         Search job listings with filters using MongoDB aggregation pipeline with $facet
-        for efficient pagination following best practices. Includes company information via $lookup.
+        for efficient pagination. Uses round-robin distribution to mix companies and
+        performs company lookup only on paginated results.
 
         Args:
             company_id: Optional company ID to filter by
@@ -876,8 +762,8 @@ class JobListingRepository:
         Returns:
             Tuple of (list of JobListingModel objects, total count)
         """
-        # Build match stage based on filters
         try:
+            # Build match stage based on filters
             match_stage = {"source_status": {"$eq": "enriched"}}
 
             if company_id:
@@ -903,35 +789,90 @@ class JobListingRepository:
                 # Use $in operator to match any value in the array
                 match_stage["role_titles"] = {"$in": [role_title]}
 
-            # Build aggregation pipeline with $facet for efficient pagination
+            # Build aggregation pipeline
             pipeline = []
 
             # Add match stage if we have filters
             if match_stage:
                 pipeline.append({"$match": match_stage})
 
-            # Add sort stage (most recent first)
-            pipeline.append({"$sort": {"updated_at": -1}})
-
-            # Add $lookup stage to join company information
+            # Round-robin distribution: Use $setWindowFields to assign row numbers per company
+            # This ensures jobs from different companies are mixed in the results
             pipeline.append(
                 {
-                    "$lookup": {
-                        "from": "companies",
-                        "localField": "company_id",
-                        "foreignField": "_id",
-                        "as": "company_info_array",
-                        "pipeline": [
+                    "$setWindowFields": {
+                        "partitionBy": "$company_id",
+                        "sortBy": {"last_seen_at": -1},
+                        "output": {"company_row_num": {"$rank": {}}},
+                    }
+                }
+            )
+
+            # Sort by company_row_num first (distributes companies evenly),
+            # then by last_seen_at (most recent within each round)
+            pipeline.append({"$sort": {"company_row_num": 1, "last_seen_at": -1}})
+
+            # Use $facet to get both count and paginated data efficiently
+            # OPTIMIZATION: Company lookup is done AFTER pagination, only for returned records
+            pipeline.append(
+                {
+                    "$facet": {
+                        # Get total count before pagination
+                        "metadata": [{"$count": "total"}],
+                        # Paginate first, then lookup company info only for limited results
+                        "data": [
+                            {"$skip": skip},
+                            {"$limit": limit},
+                            # NOW lookup company info - only for the paginated results
+                            {
+                                "$lookup": {
+                                    "from": "companies",
+                                    "localField": "company_id",
+                                    "foreignField": "_id",
+                                    "as": "company_info_array",
+                                    "pipeline": [
+                                        {
+                                            "$project": {
+                                                "_id": 1,
+                                                "name": 1,
+                                                "company_url": 1,
+                                                "linkedin_url": 1,
+                                                "logo_url": 1,
+                                                "domain": 1,
+                                                "industries": 1,
+                                                "description": 1,
+                                            }
+                                        }
+                                    ],
+                                }
+                            },
+                            # Convert company_info_array to single object
+                            {
+                                "$addFields": {
+                                    "company_info": {
+                                        "$cond": {
+                                            "if": {
+                                                "$gt": [
+                                                    {"$size": "$company_info_array"},
+                                                    0,
+                                                ]
+                                            },
+                                            "then": {
+                                                "$arrayElemAt": [
+                                                    "$company_info_array",
+                                                    0,
+                                                ]
+                                            },
+                                            "else": None,
+                                        }
+                                    }
+                                }
+                            },
+                            # Remove temporary fields
                             {
                                 "$project": {
-                                    "_id": 1,
-                                    "name": 1,
-                                    "company_url": 1,
-                                    "linkedin_url": 1,
-                                    "logo_url": 1,
-                                    "domain": 1,
-                                    "industries": 1,
-                                    "description": 1,
+                                    "company_info_array": 0,
+                                    "company_row_num": 0,
                                 }
                             },
                         ],
@@ -939,45 +880,26 @@ class JobListingRepository:
                 }
             )
 
-            # Convert company_info_array to single object (or null if empty)
-            pipeline.append(
-                {
-                    "$addFields": {
-                        "company_info": {
-                            "$cond": {
-                                "if": {"$gt": [{"$size": "$company_info_array"}, 0]},
-                                "then": {"$arrayElemAt": ["$company_info_array", 0]},
-                                "else": None,
-                            }
-                        }
-                    }
-                }
-            )
-
-            # Remove the temporary array field
-            pipeline.append({"$project": {"company_info_array": 0}})
-
-            # Use $facet to get both data and count in one query
-            pipeline.append(
-                {
-                    "$facet": {
-                        "metadata": [{"$count": "total"}],
-                        "data": [{"$skip": skip}, {"$limit": limit}],
-                    }
-                }
-            )
-
             start = time.perf_counter()
             # Execute aggregation
             result = list(self.collection.aggregate(pipeline))
-
             request_time = time.perf_counter() - start
 
             logger.info(
-                f"Executing job listings search",
+                "Executing job listings search with round-robin distribution",
                 extra={
                     "context": "JobListingRepository",
                     "pipeline": pipeline,
+                    "skip": skip,
+                    "limit": limit,
+                    "filters": {
+                        "company_id": company_id,
+                        "country": country,
+                        "city": city,
+                        "origin": origin,
+                        "profile_category": profile_category,
+                        "role_title": role_title,
+                    },
                     "request_time": f"{request_time * 1000:.0f} ms",
                 },
             )

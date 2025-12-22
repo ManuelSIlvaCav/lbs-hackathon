@@ -24,6 +24,7 @@ from domains.auth.routes import router as auth_router
 from domains.tasks.routes import router as tasks_router
 from domains.recommendations.routes import router as recommendations_router
 from domains.search_options.routes import router as search_options_router
+from domains.cv_builder.routes import router as cv_builder_router
 from migrations.migrate_company_id_to_objectid import migrate_company_id_to_objectid
 from migrations.migrate_source_ids_to_objectid import SourceIdMigration
 
@@ -50,7 +51,11 @@ app = FastAPI(
 intantiate_openai = open_ai_singleton.OpenAISingleton()
 
 
-origins = ["http://localhost:3000", "http://localhost:3001", "*"]
+origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "*",
+]
 
 # CORS middleware configuration
 app.add_middleware(
@@ -61,6 +66,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Include routers
 app.include_router(auth_router)
 app.include_router(candidates_router)
@@ -69,6 +75,7 @@ app.include_router(companies_router)
 app.include_router(tasks_router)
 app.include_router(recommendations_router)
 app.include_router(search_options_router)
+app.include_router(cv_builder_router)
 
 
 @app.get("/")
