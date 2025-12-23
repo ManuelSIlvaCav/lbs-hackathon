@@ -28,8 +28,8 @@ resource "aws_elasticache_cluster" "redis_cluster_dev" {
   engine               = "redis"
   node_type            = "cache.t4g.micro"
   num_cache_nodes      = 1
-  parameter_group_name = aws_elasticache_parameter_group.custom_redis_parameter_group_dev.name
   port                 = 6379
+  parameter_group_name = aws_elasticache_parameter_group.custom_redis_parameter_group_dev.name
   security_group_ids   = [aws_security_group.redis_dev_sg.id]
   subnet_group_name    = aws_elasticache_subnet_group.redis_public_subnet_group_dev.name
 }
@@ -45,5 +45,22 @@ resource "aws_security_group" "redis_dev_sg" {
     from_port   = 6379
     to_port     = 6379
     protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = flatten([
+      var.ecs_sg_id != null ? [var.ecs_sg_id] : [],
+      var.bastion_sg_id != null ? [var.bastion_sg_id] : []
+    ])
+  }
+
+  egress {
+    protocol    = "tcp"
+    from_port   = 0
+    to_port     = 65535
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Terraform   = "true"
+    Environment = var.environment
   }
 }

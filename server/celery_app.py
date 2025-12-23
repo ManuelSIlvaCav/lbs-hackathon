@@ -36,27 +36,90 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 
 # Build Redis URL
-if REDIS_PASSWORD:
-    CELERY_BROKER_URL = (
-        f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    )
-    CELERY_RESULT_BACKEND = (
-        f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    )
-else:
-    CELERY_BROKER_URL = os.getenv(
-        "CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-    )
-    CELERY_RESULT_BACKEND = os.getenv(
-        "CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+try:
+    if REDIS_PASSWORD:
+        CELERY_BROKER_URL = (
+            f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        )
+        CELERY_RESULT_BACKEND = (
+            f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        )
+    else:
+        CELERY_BROKER_URL = os.getenv(
+            "CELERY_BROKER_URL", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        )
+        CELERY_RESULT_BACKEND = os.getenv(
+            "CELERY_RESULT_BACKEND", f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
+        )
+
+    # Validate URLs have proper format
+    if not CELERY_BROKER_URL.startswith(
+        ("redis://", "rediss://", "amqp://", "amqps://")
+    ):
+        raise ValueError(
+            f"Invalid CELERY_BROKER_URL format: '{CELERY_BROKER_URL}'. "
+            "Must start with 'redis://', 'rediss://', 'amqp://', or 'amqps://'. "
+            "Check your .env file or environment variables."
+        )
+
+    if not CELERY_RESULT_BACKEND.startswith(("redis://", "rediss://", "rpc://", "db+")):
+        raise ValueError(
+            f"Invalid CELERY_RESULT_BACKEND format: '{CELERY_RESULT_BACKEND}'. "
+            "Must start with 'redis://', 'rediss://', 'rpc://', or 'db+'. "
+            "Check your .env file or environment variables."
+        )
+
+    logger.info(
+        "Redis configuration loaded successfully",
+        extra={
+            "context": "celery_app",
+            "broker": (
+                CELERY_BROKER_URL.split("@")[-1]
+                if "@" in CELERY_BROKER_URL
+                else CELERY_BROKER_URL
+            ),
+            "backend": (
+                CELERY_RESULT_BACKEND.split("@")[-1]
+                if "@" in CELERY_RESULT_BACKEND
+                else CELERY_RESULT_BACKEND
+            ),
+        },
     )
 
+except ValueError as e:
+    logger.error(
+        f"Configuration error: {e}",
+        extra={
+            "context": "celery_app",
+            "redis_host": REDIS_HOST,
+            "redis_port": REDIS_PORT,
+        },
+    )
+    raise
+except Exception as e:
+    logger.error(
+        f"Unexpected error loading Redis configuration: {e}",
+        extra={"context": "celery_app"},
+        exc_info=True,
+    )
+    raise
+
 # Create Celery app
-celery_app = Celery(
-    "lbs_hackathon",
-    broker=CELERY_BROKER_URL,
-    backend=CELERY_RESULT_BACKEND,
-)
+try:
+    celery_app = Celery(
+        "lbs_hackathon",
+        broker=CELERY_BROKER_URL,
+        backend=CELERY_RESULT_BACKEND,
+    )
+    logger.info("Celery app created successfully", extra={"context": "celery_app"})
+except Exception as e:
+    logger.error(
+        f"Failed to create Celery app: {e}",
+        extra={"context": "celery_app"},
+        exc_info=True,
+    )
+    raise
+    raise
 
 # Celery configuration
 celery_app.conf.update(

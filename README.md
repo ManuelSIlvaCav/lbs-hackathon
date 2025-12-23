@@ -23,6 +23,10 @@ Make sure to setup an .env file with the necesary credentials based on the env.e
 
 > docker build -f ./server/Dockerfile.prod -t lbs-prod ./server
 
+## Worker
+
+> docker run --env-file ./.env lbs-prod celery -A celery_app worker --loglevel=info -B
+
 # Frontend
 
 Easy nextjs app. Make sure to have pnpm as package manager.

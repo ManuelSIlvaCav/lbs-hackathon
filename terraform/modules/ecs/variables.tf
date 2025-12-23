@@ -117,3 +117,8 @@ variable "apollo_api_key" {
   type      = string
   sensitive = true
 }
+
+variable "redis_endpoint" {
+  type      = string
+  sensitive = true
+}

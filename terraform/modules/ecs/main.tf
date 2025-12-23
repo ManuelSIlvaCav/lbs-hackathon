@@ -69,8 +69,7 @@ resource "aws_ecs_task_definition" "server" {
         retries     = 2
         timeout     = 5,
         startPeriod = 60
-      }
-
+      },
       environment = [
         {
           name  = "PORT"
@@ -160,7 +159,7 @@ resource "aws_ecs_task_definition" "celery_worker" {
       healthCheck = {
         command : [
           "CMD-SHELL",
-          "curl -f http://localhost:${var.container_port}/health || exit 1"
+          "/app/celery_healthcheck.sh"
         ],
         interval    = 180
         retries     = 2
@@ -196,6 +195,18 @@ resource "aws_ecs_task_definition" "celery_worker" {
         {
           name  = "APOLLO_API_KEY"
           value = var.apollo_api_key
+        },
+        {
+          name  = "CELERY_BROKER_URL"
+          value = var.redis_endpoint
+        },
+        {
+          name  = "CELERY_RESULT_BACKEND"
+          value = var.redis_endpoint
+        },
+        {
+          name  = "PYTHONPATH",
+          value = "/app"
         }
       ],
       logConfiguration = {
