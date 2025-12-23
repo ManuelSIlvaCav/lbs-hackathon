@@ -119,7 +119,6 @@ except Exception as e:
         exc_info=True,
     )
     raise
-    raise
 
 # Celery configuration
 celery_app.conf.update(

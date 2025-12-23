@@ -54,6 +54,7 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    bash \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -67,8 +68,9 @@ RUN useradd -m -u 1000 appuser && \
 # Copy application code
 COPY --chown=appuser:appuser . .
 
-# Make health check script executable
-RUN chmod +x celery_healthcheck.sh
+# Make health check script executable (do this after copy to ensure file exists)
+RUN chmod +x /app/celery_healthcheck.sh && \
+    chown appuser:appuser /app/celery_healthcheck.sh
 
 # Switch to non-root user
 USER appuser

@@ -31,7 +31,7 @@ services:
   worker:
     build:
       context: ./server
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.prod
     container_name: lbs-hackathon-worker
     environment:
       - MONGODB_URL=mongodb://admin:admin123@mongo:27017

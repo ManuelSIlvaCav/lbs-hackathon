@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Celery Worker Health Check Script
 # This script checks if the Celery worker is responding to inspection commands
 

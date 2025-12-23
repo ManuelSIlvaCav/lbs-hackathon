@@ -159,7 +159,7 @@ resource "aws_ecs_task_definition" "celery_worker" {
       healthCheck = {
         command : [
           "CMD-SHELL",
-          "/app/celery_healthcheck.sh"
+          "sh /app/celery_healthcheck.sh"
         ],
         interval    = 180
         retries     = 2
