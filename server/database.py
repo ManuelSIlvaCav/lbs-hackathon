@@ -36,21 +36,53 @@ class DatabaseManager:
             # Check if it's MongoDB Atlas (contains .mongodb.net)
             if "mongodb.net" in domain:
                 # MongoDB Atlas requires +srv and query parameters
-                mongodb_url = f"mongodb+srv://{user}:{password}@{domain}/?retryWrites=true&w=majority"
+                # Add readPreference to allow reading from secondaries if primary is unavailable
+                mongodb_url = f"mongodb+srv://{user}:{password}@{domain}/?retryWrites=true&w=1&readPreference=primaryPreferred&appName=lbs-hackathon&tls=true&tlsAllowInvalidCertificates=false"
             elif domain == "localhost":
                 mongodb_url = f"mongodb://{user}:{password}@{domain}:{port}"
             else:
                 mongodb_url = f"mongodb://{user}:{password}@{domain}"
 
-            logger.info(f"Connecting to MongoDB at {mongodb_url}...")
+            logger.info(f"Connecting to MongoDB...")
             database_name = os.getenv("MONGODB_DATABASE", "lbs_hackathon")
 
-            self._client = MongoClient(mongodb_url, maxPoolSize=150)
+            self._client = MongoClient(
+                mongodb_url,
+                maxPoolSize=150,
+                minPoolSize=10,
+                serverSelectionTimeoutMS=60000,  # Increase timeout to 60s
+                connectTimeoutMS=60000,  # Connection timeout
+                socketTimeoutMS=60000,  # Socket timeout
+                retryWrites=True,
+                retryReads=True,
+                maxIdleTimeMS=45000,
+                waitQueueTimeoutMS=10000,
+                directConnection=False,  # Required for replica sets
+            )
             self._db = self._client[database_name]
-            # Test connection
-            self._client.server_info()
-            logger.info(f"✅ Connected to MongoDB at {domain}")
-            logger.info(f"✅ Using database: {database_name}")
+
+            # Test connection with retry logic using ping (works with secondaries)
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Use ping command which works with secondaries
+                    self._client.admin.command("ping")
+                    logger.info(f"Connected to MongoDB")
+                    logger.info(f"Using database: {database_name}")
+                    break
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.warning(
+                            f"Connection attempt {attempt + 1} failed, retrying... Error: {e}"
+                        )
+                        import time
+
+                        time.sleep(2)
+                    else:
+                        logger.error(
+                            f"Failed to connect to MongoDB after {max_retries} attempts"
+                        )
+                        raise
 
         return self._db
 
@@ -77,7 +109,8 @@ class DatabaseManager:
         """Check if database is connected"""
         try:
             if self._client:
-                self._client.server_info()
+                # Use ping command which works with secondaries
+                self._client.admin.command("ping")
                 return True
         except:
             pass

@@ -4,7 +4,6 @@ Repository for company search results
 
 from typing import List, Optional
 from pymongo.collection import Collection
-from bson import ObjectId
 from datetime import datetime
 
 from database import get_collection

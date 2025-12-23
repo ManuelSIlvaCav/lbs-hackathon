@@ -56,6 +56,7 @@ class CompanyModel(BaseModel):
     description: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+    last_enriched_at: Optional[datetime] = None
 
     class Config:
         populate_by_name = True

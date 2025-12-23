@@ -8,6 +8,7 @@ from pymongo.collection import Collection
 from datetime import datetime
 
 from database import get_collection
+from utils.singleton_class import SingletonMeta
 from .enrichment_models import (
     CompanyEnrichmentCreate,
     CompanyEnrichmentResponse,
@@ -16,10 +17,11 @@ from .enrichment_models import (
 )
 
 
-class DataProcessorRepository:
+class DataProcessorRepository(metaclass=SingletonMeta):
     """Repository for enrichment data operations"""
 
     def __init__(self):
+
         self.enrichments_collection: Collection = get_collection("company_enrichments")
         self.job_enrichments_collection: Collection = get_collection(
             "company_job_enrichments"

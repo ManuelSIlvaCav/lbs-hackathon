@@ -13,6 +13,8 @@ from pymongo.collection import Collection
 from pymongo.results import InsertOneResult, UpdateResult, DeleteResult
 from urllib.parse import urlparse
 
+from utils.singleton_class import SingletonMeta
+
 from .models import (
     JobListingModel,
     JobListingCreate,
@@ -75,10 +77,13 @@ def determine_origin(domain: str) -> str:
         return JobListingOrigin.CAREERS.value
 
 
-class JobListingRepository:
+class JobListingRepository(metaclass=SingletonMeta):
     """Repository for job listing CRUD operations using the shared job_listings collection"""
 
     def __init__(self):
+        if hasattr(self, "_initialized"):
+            return
+        self._initialized = True
         # Use the shared job_listings collection
         self.collection: Collection = get_collection("job_listings")
         # Create indexes for job listings

@@ -25,10 +25,11 @@ def get_followed_company_ids() -> List[ObjectId]:
     followed_company_ids = company_repository.get_followed_company_ids()
 
     logger.info(
-        f"Found {len(followed_company_ids)} companies followed by candidates",
+        f"Found companies followed by candidates",
         extra={
             "context": "get_followed_company_ids",
             "company_count": len(followed_company_ids),
+            "followed_company_ids": [str(cid) for cid in followed_company_ids],
         },
     )
 

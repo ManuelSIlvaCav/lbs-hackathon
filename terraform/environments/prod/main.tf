@@ -94,3 +94,10 @@ module "ecs" {
   openai_api_key = var.openai_api_key
   apollo_api_key = var.apollo_api_key
 }
+
+
+module "redis" {
+  source             = "../../modules/redis"
+  vpc_id             = module.vpc.vpc_id
+  private_subnet_ids = module.vpc.private_subnet_ids
+}

@@ -166,35 +166,6 @@ class JobProcessRepository:
             )
             return False
 
-    def get_lock_status(self, task_name: str) -> Optional[JobProcessModel]:
-        """
-        Get the current lock status for a task
-
-        Args:
-            task_name: Name of the task
-
-        Returns:
-            JobProcessModel if lock exists, None otherwise
-        """
-        try:
-            process = self.collection.find_one({"task_name": task_name})
-
-            if process:
-                return JobProcessModel(**process)
-
-            return None
-
-        except Exception as e:
-            logger.error(
-                f"Error getting lock status: {str(e)}",
-                extra={
-                    "context": "get_lock_status",
-                    "task_name": task_name,
-                    "error": str(e),
-                },
-            )
-            return None
-
     def get_child_tasks(self, parent_instance_id: str) -> list[JobProcessModel]:
         """
         Get all child tasks for a given parent instance ID
@@ -220,95 +191,6 @@ class JobProcessRepository:
                 },
             )
             return []
-
-    def release_locks_by_parent(self, parent_instance_id: str) -> int:
-        """
-        Release all locks for tasks with a given parent instance ID
-
-        Args:
-            parent_instance_id: The parent task instance ID
-
-        Returns:
-            Number of locks released
-        """
-        try:
-            result = self.collection.delete_many(
-                {
-                    "parent_instance_id": parent_instance_id,
-                    "status": JobProcessStatus.PROCESSING,
-                }
-            )
-
-            if result.deleted_count > 0:
-                logger.info(
-                    f"Released {result.deleted_count} child task locks for parent {parent_instance_id}",
-                    extra={
-                        "context": "release_locks_by_parent",
-                        "parent_instance_id": parent_instance_id,
-                        "count": result.deleted_count,
-                    },
-                )
-
-            return result.deleted_count
-
-        except Exception as e:
-            logger.error(
-                f"Error releasing child task locks: {str(e)}",
-                extra={
-                    "context": "release_locks_by_parent",
-                    "parent_instance_id": parent_instance_id,
-                    "error": str(e),
-                },
-            )
-            return 0
-
-    def cleanup_stale_locks(self, hours: int = 2) -> int:
-        """
-        Clean up locks that have been processing for too long
-        (likely due to crashes or hanging processes)
-
-        Args:
-            hours: Number of hours after which a lock is considered stale
-
-        Returns:
-            Number of stale locks cleaned up
-        """
-        try:
-            cutoff_time = datetime.now() - timedelta(hours=hours)
-
-            result = self.collection.update_many(
-                {
-                    "status": JobProcessStatus.PROCESSING,
-                    "started_at": {"$lt": cutoff_time},
-                },
-                {
-                    "$set": {
-                        "status": JobProcessStatus.RELEASED,
-                        "completed_at": datetime.now(),
-                        "updated_at": datetime.now(),
-                        "error_message": f"Stale lock cleaned up after {hours} hours",
-                    }
-                },
-            )
-
-            if result.modified_count > 0:
-                logger.info(
-                    f"Cleaned up {result.modified_count} stale locks",
-                    extra={
-                        "context": "cleanup_stale_locks",
-                        "count": result.modified_count,
-                        "hours": hours,
-                    },
-                )
-
-            return result.modified_count
-
-        except Exception as e:
-            logger.error(
-                f"Error cleaning up stale locks: {str(e)}",
-                extra={"context": "cleanup_stale_locks", "error": str(e)},
-            )
-            return 0
 
 
 # Singleton instance

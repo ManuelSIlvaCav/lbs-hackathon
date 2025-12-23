@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useCandidateContext } from "@/contexts/candidate-context";
 import { useEffect, useState } from "react";
@@ -122,12 +123,10 @@ export default function SearchPreferencesPage() {
             </button>
           ))}
         </div>
-        <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="absolute top-0 left-0 h-full bg-green-500 transition-all duration-300"
-            style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%` }}
-          />
-        </div>
+        <Progress
+          value={((currentStep + 1) / STEPS.length) * 100}
+          className="h-2"
+        />
       </div>
 
       {Object.keys(formData).length > 0 && (

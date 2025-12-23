@@ -25,8 +25,6 @@ from domains.tasks.routes import router as tasks_router
 from domains.recommendations.routes import router as recommendations_router
 from domains.search_options.routes import router as search_options_router
 from domains.cv_builder.routes import router as cv_builder_router
-from migrations.migrate_company_id_to_objectid import migrate_company_id_to_objectid
-from migrations.migrate_source_ids_to_objectid import SourceIdMigration
 
 
 @asynccontextmanager

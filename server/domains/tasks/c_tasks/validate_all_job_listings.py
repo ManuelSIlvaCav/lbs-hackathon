@@ -29,20 +29,6 @@ def validate_all_job_listings(self):
     Returns:
         dict: Summary of triggered tasks
     """
-    task_name = "validate_all_job_listings"
-
-    # Try to acquire coordinator lock
-    lock = job_process_repository.acquire_lock(task_name, self.request.id)
-
-    if not lock:
-        logger.warning(
-            "Coordinator task already running, skipping execution",
-            extra={"context": "validate_all_job_listings"},
-        )
-        return {
-            "status": "skipped",
-            "summary_message": "Another coordinator instance is already running",
-        }
 
     try:
         logger.info(
@@ -53,21 +39,8 @@ def validate_all_job_listings(self):
             },
         )
 
-        # Clean up stale locks (locks older than 2 hours)
-        stale_locks_cleaned = job_process_repository.cleanup_stale_locks(hours=2)
-        if stale_locks_cleaned > 0:
-            logger.info(
-                "Cleaned up stale locks before starting",
-                extra={
-                    "context": "validate_all_job_listings",
-                    "stale_locks_cleaned": stale_locks_cleaned,
-                },
-            )
-
-        # Get all followed company IDs
-        # company_ids = company_repository.get_followed_company_ids()
-
-        companies = company_repository.get_all_companies()
+        # Get all companies that need enrichment (not enriched in last 24 hours)
+        companies = company_repository.get_all_companies_to_enrich()
         company_ids = [company.id for company in companies]
 
         if not company_ids:
@@ -75,7 +48,7 @@ def validate_all_job_listings(self):
                 "No followed companies found",
                 extra={"context": "validate_all_job_listings"},
             )
-            job_process_repository.release_lock(task_name)
+
             return {
                 "status": "completed",
                 "total_companies": 0,
@@ -83,7 +56,7 @@ def validate_all_job_listings(self):
             }
 
         logger.info(
-            f"Found {len(company_ids)} companies to process",
+            f"Found companies to process",
             extra={
                 "context": "validate_all_job_listings",
                 "total_companies": len(company_ids),
@@ -124,14 +97,15 @@ def validate_all_job_listings(self):
         # Execute all company tasks sequentially using chain
         if company_tasks:
             task_chain = chain(*company_tasks)
+
             result = task_chain.apply_async()
 
             logger.info(
                 f"Started sequential chain of company tasks",
                 extra={
                     "context": "validate_all_job_listings",
-                    "chain_id": result.id,
                     "total_tasks": len(company_tasks),
+                    "result": result,
                 },
             )
 
@@ -153,9 +127,6 @@ def validate_all_job_listings(self):
                 **summary,
             },
         )
-
-        # Release lock with completed status
-        job_process_repository.release_lock(task_name)
         return summary
 
     except Exception as e:
@@ -166,6 +137,4 @@ def validate_all_job_listings(self):
                 "error_msg": str(e),
             },
         )
-        # Release lock with failed status
-        job_process_repository.release_lock(task_name, str(e))
         raise

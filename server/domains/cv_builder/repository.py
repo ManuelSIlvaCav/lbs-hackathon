@@ -9,21 +9,17 @@ from pymongo.collection import Collection
 from pymongo import ASCENDING, DESCENDING
 
 from database import get_collection
+from utils.singleton_class import SingletonMeta
 from .models import (
     CVBuilderDocument,
     CVBuilderCreate,
     CVBuilderUpdate,
     CVTemplate,
     CVScore,
-    CVContactInfo,
-    CVExperienceItem,
-    CVEducationItem,
-    CVSkillsSummary,
-    CVSummary,
 )
 
 
-class CVBuilderRepository:
+class CVBuilderRepository(metaclass=SingletonMeta):
     """Repository for CV Builder document operations"""
 
     def __init__(self):

@@ -3,16 +3,16 @@ Task for enriching job listings for a single company
 """
 
 import time
-from bson import ObjectId
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
 from datetime import datetime
 import asyncio
 import logging
 
-from domains.companies.repository import company_repository
+from domains.companies.service import company_service
 from domains.job_listings.repository import job_listing_repository
 from utils.open_ai_singleton import OpenAISingleton
+from domains.companies.repository import company_repository
 
 logger = logging.getLogger("app")
 
@@ -23,8 +23,8 @@ BATCH_SIZE = 15  # Process 15 job listings at a time
 @shared_task(
     name="domains.tasks.c_tasks.enrich_company_job_listings",
     bind=True,
-    soft_time_limit=3600,
-    time_limit=4500,
+    soft_time_limit=5400,
+    time_limit=6300,
 )
 def enrich_company_job_listings(
     self,
@@ -36,10 +36,9 @@ def enrich_company_job_listings(
     Enrich job listings for a single company.
 
     This task:
-    1. Gets the company from the database
-    2. Gets job listings with specified source_status
-    3. Enriches job listings in batches to respect rate limits
-    4. Uses async processing to avoid overwhelming the API
+    1. Gets job listings with specified source_status
+    2. Enriches job listings in batches to respect rate limits
+    3. Uses async processing to avoid overwhelming the API
 
     Args:
         company_id: The ID of the company to enrich job listings for
@@ -60,42 +59,9 @@ def enrich_company_job_listings(
     )
 
     try:
-        # Get company from database
-        company = company_repository.get_company_by_id(company_id)
-        if not company:
-            logger.warning(
-                "Company not found in database",
-                extra={
-                    "context": "enrich_company_job_listings",
-                    "company_id": company_id,
-                },
-            )
-            return {
-                "status": "failed",
-                "company_id": company_id,
-                "error": "Company not found",
-                "failed_at": datetime.now().isoformat(),
-            }
-
-        # Get job listings with specified source_status
-        # Build query based on source_status parameter
-        if source_status == "scrapped":
-            # For initial enrichment: get jobs with null or 'scrapped' status
-            status_query = {
-                "$or": [{"source_status": None}, {"source_status": "scrapped"}]
-            }
-        else:
-            # For re-validation/revision: get jobs with specific status (e.g., 'enriched')
-            status_query = {"source_status": source_status}
-
-        job_listings = job_listing_repository.collection.find(
-            {
-                "company_id": ObjectId(company_id),
-                **status_query,
-            }
-        ).sort("updated_at", -1)
-
-        job_listing_ids = [str(job["_id"]) for job in job_listings]
+        job_listing_ids = company_service.get_job_listings(
+            company_id=company_id, source_status=source_status
+        )
 
         if not job_listing_ids:
             logger.info(
@@ -103,13 +69,14 @@ def enrich_company_job_listings(
                 extra={
                     "context": "enrich_company_job_listings",
                     "company_id": company_id,
-                    "company_name": company.name,
                 },
+            )
+            timestamp_updated = company_repository.update_company_enrichment_timestamp(
+                company_id
             )
             return {
                 "status": "completed",
                 "company_id": company_id,
-                "company_name": company.name,
                 "total_job_listings": 0,
                 "successful": 0,
                 "failed": 0,
@@ -121,7 +88,6 @@ def enrich_company_job_listings(
             extra={
                 "context": "enrich_company_job_listings",
                 "company_id": company_id,
-                "company_name": company.name,
                 "job_count": len(job_listing_ids),
             },
         )
@@ -142,7 +108,6 @@ def enrich_company_job_listings(
                 extra={
                     "context": "enrich_company_job_listings",
                     "company_id": company_id,
-                    "company_name": company.name,
                     "batch_num": batch_num,
                     "total_batches": total_batches,
                     "batch_size": len(batch),
@@ -150,7 +115,7 @@ def enrich_company_job_listings(
             )
 
             # Process batch asynchronously
-            batch_results = asyncio.run(_enrich_batch(batch, company.name))
+            batch_results = asyncio.run(_enrich_batch(batch, company_id=company_id))
 
             # Aggregate results
             for result in batch_results:
@@ -167,21 +132,26 @@ def enrich_company_job_listings(
 
         request_time = time.perf_counter() - start
 
+        # Update company's last_enriched_at timestamp
+
+        timestamp_updated = company_repository.update_company_enrichment_timestamp(
+            company_id
+        )
+
         logger.info(
-            f"Completed enrichment for company {company.name}",
+            f"Completed enrichment for company",
             extra={
                 "context": "enrich_company_job_listings",
                 "company_id": company_id,
-                "company_name": company.name,
                 "processed": len(job_listing_ids),
                 "elapsed_time": round(request_time, 2),
+                "timestamp_updated": timestamp_updated,
             },
         )
 
         summary = {
             "status": "completed",
             "company_id": company_id,
-            "company_name": company.name,
             "total_job_listings": len(job_listing_ids),
             "successful": successful_enrichments,
             "failed": failed_enrichments,
@@ -227,21 +197,22 @@ def enrich_company_job_listings(
         }
 
 
-async def _enrich_batch(job_listing_ids: list, company_name: str) -> list:
+async def _enrich_batch(job_listing_ids: list, company_id: str) -> list:
     """
     Enrich a batch of job listings asynchronously.
 
     Args:
         job_listing_ids: List of job listing IDs to enrich
-        company_name: Name of the company for logging
+        company_id: ID of the company for logging
 
     Returns:
         List of results with success/failure status
     """
 
     tasks = []
+    start = time.perf_counter()
     for job_id in job_listing_ids:
-        tasks.append(_enrich_single_job(job_id, company_name))
+        tasks.append(_enrich_single_job(job_id, company_id=company_id))
 
     # Run all tasks concurrently
     results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -263,21 +234,23 @@ async def _enrich_batch(job_listing_ids: list, company_name: str) -> list:
 
     # Check rate limits after batch
     rate_info = OpenAISingleton.get_rate_limits()
+    request_time = time.perf_counter() - start
     if rate_info.remaining_requests is not None:
         logger.info(
             f"Batch complete - OpenAI rate limits: {rate_info.remaining_requests}/{rate_info.limit_requests} requests remaining",
             extra={
                 "context": "enrich_batch",
-                "company_name": company_name,
                 "remaining_requests": rate_info.remaining_requests,
                 "limit_requests": rate_info.limit_requests,
                 "remaining_tokens": rate_info.remaining_tokens,
                 "limit_tokens": rate_info.limit_tokens,
                 "reset_token_time": rate_info.reset_token_time,
+                "batch_request_time": round(request_time, 2),
             },
         )
 
     reset_time_seconds = OpenAISingleton.get_reset_time_seconds()
+
     if reset_time_seconds > 0:
         logger.info(
             f"Waiting {reset_time_seconds}s before next batch to respect rate limits"
@@ -287,13 +260,13 @@ async def _enrich_batch(job_listing_ids: list, company_name: str) -> list:
     return batch_results
 
 
-async def _enrich_single_job(job_id: str, company_name: str) -> dict:
+async def _enrich_single_job(job_id: str, company_id: str) -> dict:
     """
     Enrich a single job listing.
 
     Args:
         job_id: Job listing ID to enrich
-        company_name: Name of the company for logging
+        company_id: ID of the company for logging
 
     Returns:
         Dict with success status and error if failed
@@ -320,7 +293,7 @@ async def _enrich_single_job(job_id: str, company_name: str) -> dict:
             extra={
                 "context": "enrich_company_job_listings",
                 "job_listing_id": job_id,
-                "company_name": company_name,
+                "company_id": company_id,
                 "error_msg": str(e),
             },
         )

@@ -426,9 +426,6 @@ async def cancel_task(
                             },
                         )
 
-            # Release all child task locks in the repository
-            locks_released = job_process_repository.release_locks_by_parent(task_id)
-
             # Also try to iterate through Celery chain results (for any tasks not tracked in repo)
             try:
                 current = chain_result

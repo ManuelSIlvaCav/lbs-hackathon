@@ -480,6 +480,13 @@ RESULT FIELD (MANDATORY):
 - "no_longer_available": Job posting EXPLICITLY states it is closed
 - "bad_format": Cannot extract job_title or profile_categories (invalid content, error pages)
 
+
+failed_result_error (MANDATORY):
+- Set to null when result is "success"
+- Set to "no_longer_available" when result is "no_longer_available"
+- Set to "bad_format" when result is "bad_format"
+- NO OTHER VALUES ALLOWED
+
 FINAL INSTRUCTION:
 1. Check if job EXPLICITLY states it is closed. Be CONSERVATIVE. If so, set result="no_longer_available".
 2. Attempt to parse job_title and profile_categories.

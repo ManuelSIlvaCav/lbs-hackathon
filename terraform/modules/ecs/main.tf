@@ -12,7 +12,7 @@ resource "aws_ecs_cluster" "default" {
 resource "aws_ecs_service" "default_service" {
   name                               = "${var.service_name}_service"
   cluster                            = aws_ecs_cluster.default.id
-  task_definition                    = aws_ecs_task_definition.default_definition.arn
+  task_definition                    = aws_ecs_task_definition.server.arn
   desired_count                      = var.ecs_task_desired_count
   deployment_minimum_healthy_percent = var.ecs_task_deployment_minimum_healthy_percent
   deployment_maximum_percent         = var.ecs_task_deployment_maximum_percent
@@ -36,7 +36,7 @@ resource "aws_ecs_service" "default_service" {
 }
 
 ## Creates ECS Task Definition
-resource "aws_ecs_task_definition" "default_definition" {
+resource "aws_ecs_task_definition" "server" {
   family                   = "${var.service_name}_task"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
@@ -70,6 +70,7 @@ resource "aws_ecs_task_definition" "default_definition" {
         timeout     = 5,
         startPeriod = 60
       }
+
       environment = [
         {
           name  = "PORT"
@@ -111,6 +112,106 @@ resource "aws_ecs_task_definition" "default_definition" {
     }
   ])
 }
+
+## --------- TASK FOR CELERY WORKERS ---------
+resource "aws_ecs_service" "worker" {
+  name            = "celery-worker"
+  cluster         = aws_ecs_cluster.default.id
+  task_definition = aws_ecs_task_definition.celery_worker.arn
+  launch_type     = "FARGATE"
+  desired_count   = 1
+
+  network_configuration {
+    security_groups  = [var.ecs_sg_id, var.alb_security_group_id]
+    subnets          = var.private_subnet_ids
+    assign_public_ip = false
+  }
+}
+
+
+resource "aws_ecs_task_definition" "celery_worker" {
+  family                   = "${var.service_name}_worker_task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
+  task_role_arn            = aws_iam_role.ecs_task_role.arn
+
+  cpu    = var.cpu_units
+  memory = var.memory
+
+  container_definitions = jsonencode([
+    {
+      name  = "${var.service_name}_worker"
+      image = "${var.ecr_repository_url}:latest"
+      # Overrides the Dockerfile CMD to start the worker
+      command     = ["celery", "-A", "celery_app", "worker", "--loglevel=info", "-B"]
+      cpu         = var.cpu_units
+      memory      = var.memory
+      essential   = true
+      stopTimeout = 120
+      portMappings = [
+        {
+          containerPort = var.container_port
+          hostPort      = var.container_port
+          protocol      = "tcp"
+        }
+      ],
+
+      healthCheck = {
+        command : [
+          "CMD-SHELL",
+          "curl -f http://localhost:${var.container_port}/health || exit 1"
+        ],
+        interval    = 180
+        retries     = 2
+        timeout     = 5,
+        startPeriod = 60
+      }
+
+      environment = [
+        {
+          name  = "PORT"
+          value = tostring(var.container_port)
+        },
+        {
+          name  = "MONGODB_DOMAIN"
+          value = var.mongodb_domain
+        },
+        {
+          name  = "MONGODB_USER"
+          value = var.mongodb_user
+        },
+        {
+          name  = "MONGODB_PASSWORD"
+          value = var.mongodb_password
+        },
+        {
+          name  = "MONGODB_DATABASE"
+          value = var.mongodb_database
+        },
+        {
+          name  = "OPENAI_API_KEY"
+          value = var.openai_api_key
+        },
+        {
+          name  = "APOLLO_API_KEY"
+          value = var.apollo_api_key
+        }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs_worker.name,
+          "awslogs-region"        = var.logs_region,
+          "awslogs-stream-prefix" = "${var.service_name}-worker-log-stream-${var.environment}"
+        }
+      }
+    }
+  ])
+}
+
+
+
 ## --------- IAM Roles for ECS Task Execution and Task Definition ---------
 
 
@@ -151,5 +252,9 @@ resource "aws_iam_role_policy_attachment" "ecs_task_role_policy_rds" {
 ## --------- Other -------
 resource "aws_cloudwatch_log_group" "ecs" {
   name = "ecs/${var.service_name}-${var.environment}"
+}
 
+
+resource "aws_cloudwatch_log_group" "ecs_worker" {
+  name = "ecs/${var.service_name}-worker-${var.environment}"
 }

@@ -11,6 +11,8 @@ from pymongo.collection import Collection
 from pymongo.results import InsertOneResult, UpdateResult, DeleteResult
 from pymongo import ASCENDING
 
+from utils.singleton_class import SingletonMeta
+
 from .candidate_file_repository import candidate_file_repository
 
 
@@ -36,7 +38,7 @@ logger = logging.getLogger("app")
 # ============================================================================
 
 
-class CandidateRepository:
+class CandidateRepository(metaclass=SingletonMeta):
     """Repository for candidate CRUD operations"""
 
     def __init__(self):
