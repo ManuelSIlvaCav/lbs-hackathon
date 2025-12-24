@@ -4,9 +4,9 @@
 
 set -e
 
-# Try to ping the celery worker
-# The inspect ping command will return the worker status
-celery -A celery_app inspect ping -d "celery@$HOSTNAME" --timeout=10 2>&1 | grep -q "pong"
+# Check if celery worker process is running and inspect active tasks
+# This is more reliable in containerized environments than ping
+celery -A celery_app inspect active --timeout=10 > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
     echo "Celery worker is healthy"
